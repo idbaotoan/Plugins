@@ -1,0 +1,16 @@
+.page-title {
+	font-size: 26px;
+	font-weight: normal;
+
+	@include bp(md) {
+		font-size: 34px;
+	}
+}
+
+.jobify-skin-1{
+	.page-title{
+		font-size: 59px;
+		font-weight: normal;
+		font-weight:700;	
+	}	
+}

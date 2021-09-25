@@ -1,0 +1,17 @@
+How to install Demo Data
+
+1. Download Careerfy WordPress Theme.
+
+2. Install careerfy-theme.zip Under Appearance > Add New Theme
+
+3. Activate Theme will redirect to plugin installing page
+
+4. Install careerfy-framework Plugin
+
+5. Activate the plugin careerfy-framework
+
+6. Go to Appearance > Import Demo Data
+
+7. Follow instruction in Import Demo Data all done.
+
+if still there is any issue please contact at https://support.eyecix.com/open.php will provide you free demo installation services at no cost

@@ -1,0 +1,39 @@
+.site-footer {
+    background: #24262b;
+}
+.jobify-skin-1{
+	.skin-1-footer{
+		.site-title{
+			font-size: 30px;
+		}
+		.footer-widgets a{
+			text-decoration: none;
+		}
+		a:hover{
+	    	opacity: .75;
+	    }
+		ul {
+		    list-style-type: none;
+		    li a:hover{
+		    	opacity: .75;
+		    }
+		    li{
+		    	margin-bottom:16px;
+		    }
+		}
+		.copyright{
+			box-shadow: none;
+			.site-info{
+			    opacity: .5;
+			}
+			.footer-social{
+				display: none;
+			}
+		}
+		.footer-widgets{
+			.col-lg-1{
+				padding-right: 0px;
+			}
+		}
+	}
+}

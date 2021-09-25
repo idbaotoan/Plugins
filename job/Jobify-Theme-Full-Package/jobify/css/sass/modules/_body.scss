@@ -1,0 +1,71 @@
+body {
+	color: #797979;
+}
+.jobify-skin-1{
+	.elementor-section.elementor-section-boxed > {
+		.elementor-container{
+			max-width: 1170px;
+		}
+	}
+	.text-primary-100{
+		--text-opacity: 1;
+    	color: #9061f9;
+	}
+	.text-primary-100:hover{
+		--text-opacity: 1;
+	    color: #7e3af2;
+	}
+	.button, .tnp-form .tnp-submit, .search_submit input[type="submit"], #commentform input[type="submit"]{
+		border-width: 1px !important;
+    	border-radius: 0px;
+	    background-color: #fff;
+	    color: #5521b5;
+	    border-color: #5521b5;
+	    padding: 16px; 
+	    letter-spacing: 0.8px;
+	    text-transform: capitalize;
+	    font-size: 14px;
+	    font-weight: 500 !important;
+	    border-style: solid;
+	}
+	.button:hover, .tnp-form input[type="submit"]:hover, .search_submit input[type="submit"]:hover, #commentform input[type="submit"]:hover{
+		background-color: #5521b5;
+		color: #fff;
+	}
+	label{
+		color: #404668;
+	}
+	.select2-search__field, input[type="text"]{
+		color: #404668;
+	}
+	input::placeholder, ::-webkit-input-placeholder, ::-moz-placeholder, :-ms-input-placeholder, .select2-selection__placeholder, :-moz-placeholder, ::-ms-input-placeholder{
+	    color: #a0aec4 !important;
+	}  
+	@media screen and (max-width: 768px) {
+	    input::placeholder, ::-webkit-input-placeholder, ::-moz-placeholder, :-ms-input-placeholder, .select2-selection__placeholder, :-moz-placeholder, ::-ms-input-placeholder {
+	        color: #a0aec4 !important;
+	    }
+	}
+	h1,h2,h3,h4,h5,h6{
+		color: #404668;
+	}
+	.site-main{
+		.button{
+			& a{
+				&:hover{
+					color: #fff;
+					text-decoration: none;
+				}
+			}
+		}
+		a:not(.button){
+			&:hover{
+				color: #7e3af2;
+				text-decoration: none;
+			}
+		}
+	}
+	li::marker{
+		font-size: 20px;
+	}
+}

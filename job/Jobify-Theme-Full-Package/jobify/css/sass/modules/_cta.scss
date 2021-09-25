@@ -1,0 +1,66 @@
+.footer-cta {
+	text-align: center;
+	margin: 100px 0 0;
+	padding: 2em 0;
+}
+
+.footer-cta h2 {
+	font-size: 28px;
+	font-weight: normal;
+
+	@include bp(md) {
+		font-size: 38px;
+	}
+}
+
+.footer-cta .button,
+.slider-text .button { // extremely lazy
+	@extend .button--type-inverted;
+	border-color: #fff !important;
+	color: #fff !important;
+	
+	&:hover {
+		background-color: #fff !important;
+		border-color: #fff !important;
+	}
+}
+
+.jobify-skin-1{
+	.cta-newsletter{
+		margin-top: 20px;
+		.tnp-form{
+			.tnp-email{
+				float:left;
+				width: 68%;
+				border: 0 solid #a6abc9;
+			    background-color: #fff;
+			    color: #404668;
+			    float: left;
+			    border-radius: 0;
+			    padding: 16px;
+			    font-size: 16px;
+			    ::placeholder{
+			    	color: #a0aec4;
+			    }
+			    @media screen and (max-width: 767px){
+    				width: 63%;
+    				font-size: 14px;
+				}
+			}
+			.tnp-submit{
+				float:right;
+				color: #5521b5;
+				width: 30%;
+				background-color: #fff;
+				border: 1px solid #5521b5;
+				@media screen and (max-width: 991px){
+					font-size: 14px;
+				}
+				@media screen and (max-width: 767px){
+    				font-size: 12px;
+    				width: 36%;
+				}
+			}
+		}	
+	}
+}

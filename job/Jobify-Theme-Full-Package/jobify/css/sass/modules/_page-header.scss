@@ -1,0 +1,41 @@
+.page-header {
+	text-align: center;
+	overflow: hidden;
+	padding: 20px 0;
+	background: #fafafa;
+	border-bottom: 1px solid rgba(204, 204, 204, 0.41);
+
+	&.has-image {
+		padding: 0;
+		border: 0;
+		max-height: 400px;
+		overflow: hidden;
+
+		img {
+			min-width: 100%;
+			width: auto;
+			height: auto;
+			display: block;
+		}
+	}
+}
+.jobify-skin-1{
+	.page-header{
+		background-color: #D4D6E0;
+		padding: 80px;
+		border-radius: 0px 0px 120px 0px;
+		.company_logo{
+			margin-top: 40px;
+			height: 80px;
+		    min-width: 80px;
+		    border-radius: 4px;
+		}
+		.company_title a{
+			color: #9061f9;
+		}
+		.company_title a:hover{
+			color: #7e3af2;
+			text-decoration: none;
+		}
+	}
+}
