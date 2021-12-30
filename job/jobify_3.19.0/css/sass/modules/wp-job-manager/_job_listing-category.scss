@@ -1,7 +1,0 @@
-.job-category {
-	@extend .job-tag;
-
-	&:before {
-		content: $ionicon-var-ios-pricetag;
-	}
-}

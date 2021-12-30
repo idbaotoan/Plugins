@@ -1,7 +1,0 @@
-.reset {
-	@extend .rss_link;
-
-	&:before {
-		content: $ionicon-var-close;
-	}
-}
