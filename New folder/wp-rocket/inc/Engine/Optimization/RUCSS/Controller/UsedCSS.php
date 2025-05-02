@@ -4,16 +4,17 @@ declare( strict_types=1 );
 namespace WP_Rocket\Engine\Optimization\RUCSS\Controller;
 
 use WP_Rocket\Admin\Options_Data;
-use WP_Rocket\Engine\Common\Context\ContextInterface;
+use WP_Rocket\Engine\Common\Queue\QueueInterface;
 use WP_Rocket\Engine\Optimization\CSSTrait;
-use WP_Rocket\Engine\Optimization\DynamicLists\DefaultLists\DataManager;
 use WP_Rocket\Engine\Optimization\RegexTrait;
+use WP_Rocket\Engine\Optimization\RUCSS\Database\Queries\ResourcesQuery;
 use WP_Rocket\Engine\Optimization\RUCSS\Database\Queries\UsedCSS as UsedCSS_Query;
-use WP_Rocket\Engine\Common\JobManager\Managers\ManagerInterface;
+use WP_Rocket\Engine\Optimization\RUCSS\Frontend\APIClient;
+use WP_Rocket\Logger\Logger;
+use WP_Admin_Bar;
 
 class UsedCSS {
-	use RegexTrait;
-	use CSSTrait;
+	use RegexTrait, CSSTrait;
 
 	/**
 	 * UsedCss Query instance.
@@ -23,6 +24,13 @@ class UsedCSS {
 	private $used_css_query;
 
 	/**
+	 * Resources Query instance.
+	 *
+	 * @var ResourcesQuery
+	 */
+	private $resources_query;
+
+	/**
 	 * Plugin options instance.
 	 *
 	 * @var Options_Data
@@ -30,11 +38,18 @@ class UsedCSS {
 	protected $options;
 
 	/**
-	 * DataManager instance
+	 * APIClient instance
 	 *
-	 * @var DataManager
+	 * @var APIClient
 	 */
-	private $data_manager;
+	private $api;
+
+	/**
+	 * Queue instance.
+	 *
+	 * @var QueueInterface
+	 */
+	private $queue;
 
 	/**
 	 * Filesystem instance
@@ -42,13 +57,6 @@ class UsedCSS {
 	 * @var Filesystem
 	 */
 	private $filesystem;
-
-	/**
-	 * RUCSS context.
-	 *
-	 * @var ContextInterface
-	 */
-	protected $context;
 
 	/**
 	 * External exclusions list, can be urls or attributes.
@@ -62,46 +70,95 @@ class UsedCSS {
 	 *
 	 * @var string[]
 	 */
-	private $inline_atts_exclusions = [];
+	private $inline_atts_exclusions = [
+		'rocket-lazyload-inline-css',
+		'divi-style-parent-inline-inline-css',
+		'gsf-custom-css',
+		'extra-style-inline-inline-css',
+		'woodmart-inline-css-inline-css',
+		'woodmart_shortcodes-custom-css',
+		'rs-plugin-settings-inline-css', // For revolution slider, it saves settings for each slider.
+		'divi-style-inline-inline-css',
+	];
 
 	/**
 	 * Inline CSS content exclusions patterns to be preserved on the page after treeshaking.
 	 *
 	 * @var string[]
 	 */
-	private $inline_content_exclusions = [];
-
-	/**
-	 * Above the fold Job Manager.
-	 *
-	 * @var ManagerInterface
-	 */
-	private $manager;
+	private $inline_content_exclusions = [
+		'.wp-container-',
+		'.wp-elements-',
+		'#wpv-expandable-',
+		'#ultib3-',
+		'.uvc-wrap-',
+		'.jet-listing-dynamic-post-',
+		'.vcex_',
+		'.wprm-advanced-list-',
+	];
 
 	/**
 	 * Instantiate the class.
 	 *
-	 * @param Options_Data     $options Options instance.
-	 * @param UsedCSS_Query    $used_css_query Usedcss Query instance.
-	 * @param DataManager      $data_manager DataManager instance.
-	 * @param Filesystem       $filesystem Filesystem instance.
-	 * @param ContextInterface $context RUCSS context.
-	 * @param ManagerInterface $manager RUCSS manager.
+	 * @param Options_Data   $options         Options instance.
+	 * @param UsedCSS_Query  $used_css_query  Usedcss Query instance.
+	 * @param ResourcesQuery $resources_query Resources Query instance.
+	 * @param APIClient      $api             APIClient instance.
+	 * @param QueueInterface $queue           Queue instance.
+	 * @param Filesystem     $filesystem      Filesystem instance.
 	 */
 	public function __construct(
 		Options_Data $options,
 		UsedCSS_Query $used_css_query,
-		DataManager $data_manager,
-		Filesystem $filesystem,
-		ContextInterface $context,
-		ManagerInterface $manager
+		ResourcesQuery $resources_query,
+		APIClient $api,
+		QueueInterface $queue,
+		Filesystem $filesystem
 	) {
-		$this->options        = $options;
-		$this->used_css_query = $used_css_query;
-		$this->data_manager   = $data_manager;
-		$this->filesystem     = $filesystem;
-		$this->context        = $context;
-		$this->manager        = $manager;
+		$this->options         = $options;
+		$this->used_css_query  = $used_css_query;
+		$this->resources_query = $resources_query;
+		$this->api             = $api;
+		$this->queue           = $queue;
+		$this->filesystem      = $filesystem;
+	}
+
+	/**
+	 * Determines if we treeshake the CSS.
+	 *
+	 * @return boolean
+	 */
+	public function is_allowed(): bool {
+		if ( rocket_get_constant( 'DONOTROCKETOPTIMIZE' ) ) {
+			return false;
+		}
+
+		if ( rocket_bypass() ) {
+			return false;
+		}
+
+		if ( ! $this->is_enabled() ) {
+			return false;
+		}
+
+		if ( $this->is_password_protected() ) {
+			return false;
+		}
+
+		if ( is_rocket_post_excluded_option( 'remove_unused_css' ) ) {
+			return false;
+		}
+
+		// Bailout if user is logged in.
+		if ( is_user_logged_in() ) {
+			return false;
+		}
+
+		if ( ! $this->filesystem->is_writable_folder() ) {
+			return false;
+		}
+
+		return true;
 	}
 
 	/**
@@ -116,6 +173,40 @@ class UsedCSS {
 	}
 
 	/**
+	 * Can optimize url.
+	 *
+	 * @return bool
+	 */
+	private function can_optimize_url() {
+		if ( rocket_bypass() ) {
+			return false;
+		}
+
+		if ( ! $this->is_enabled() ) {
+			return false;
+		}
+
+		return ! is_rocket_post_excluded_option( 'remove_unused_css' );
+	}
+
+	/**
+	 * Checks if on a single post and if it is password protected
+	 *
+	 * @since 3.11
+	 *
+	 * @return bool
+	 */
+	private function is_password_protected(): bool {
+		if ( ! is_singular() ) {
+			return false;
+		}
+
+		$post = get_post();
+
+		return ! empty( $post->post_password );
+	}
+
+	/**
 	 * Start treeshaking the current page.
 	 *
 	 * @param string $html Buffet HTML for current page.
@@ -123,15 +214,7 @@ class UsedCSS {
 	 * @return string
 	 */
 	public function treeshake( string $html ): string {
-		if ( ! $this->context->is_allowed() ) {
-			return $html;
-		}
-
-		$clean_html = $this->hide_comments( $html );
-		$clean_html = $this->hide_noscripts( $clean_html );
-		$clean_html = $this->hide_scripts( $clean_html );
-
-		if ( ! $this->html_has_title_tag( $clean_html ) ) {
+		if ( ! $this->is_allowed() ) {
 			return $html;
 		}
 
@@ -141,7 +224,47 @@ class UsedCSS {
 		$used_css  = $this->used_css_query->get_row( $url, $is_mobile );
 
 		if ( empty( $used_css ) ) {
-			$this->manager->add_url_to_the_queue( $url, $is_mobile );
+			// Send the request to add this url into the queue and get the jobId and queueName.
+
+			/**
+			 * Filters the RUCSS safelist
+			 *
+			 * @since 3.11
+			 *
+			 * @param array $safelist Array of safelist values.
+			 */
+			$safelist = apply_filters( 'rocket_rucss_safelist', $this->options->get( 'remove_unused_css_safelist', [] ) );
+
+			$config = [
+				'treeshake'      => 1,
+				'rucss_safelist' => $safelist,
+				'is_mobile'      => $is_mobile,
+				'is_home'        => $this->is_home( $url ),
+			];
+
+			$add_to_queue_response = $this->api->add_to_queue( $url, $config );
+			if ( 200 !== $add_to_queue_response['code'] ) {
+				Logger::error(
+					'Error when contacting the RUCSS API.',
+					[
+						'rucss error',
+						'url'     => $url,
+						'code'    => $add_to_queue_response['code'],
+						'message' => $add_to_queue_response['message'],
+					]
+				);
+
+				return $html;
+			}
+
+			// We got jobid and queue name so save them into the DB and change status to be pending.
+			$this->used_css_query->create_new_job(
+				$url,
+				$add_to_queue_response['contents']['jobId'],
+				$add_to_queue_response['contents']['queueName'],
+				$is_mobile
+			);
+
 			return $html;
 		}
 
@@ -153,10 +276,11 @@ class UsedCSS {
 
 		if ( empty( $used_css_content ) ) {
 			$this->used_css_query->delete_by_url( $url );
+
 			return $html;
 		}
 
-		$html = $this->remove_used_css_from_html( $clean_html, $html );
+		$html = $this->remove_used_css_from_html( $html );
 		$html = $this->add_used_css_to_html( $html, $used_css_content );
 		$html = $this->add_used_fonts_preload( $html, $used_css_content );
 		$html = $this->remove_google_font_preconnect( $html );
@@ -212,14 +336,17 @@ class UsedCSS {
 	/**
 	 * Alter HTML and remove all CSS which was processed from HTML page.
 	 *
-	 * @param string $clean_html Cleaned HTML after removing comments, noscripts and scripts.
 	 * @param string $html HTML content.
 	 *
 	 * @return string HTML content.
 	 */
-	private function remove_used_css_from_html( string $clean_html, string $html ): string {
-		$this->set_inline_exclusions_lists();
+	private function remove_used_css_from_html( string $html ): string {
+		$clean_html = $this->hide_comments( $html );
+		$clean_html = $this->hide_noscripts( $clean_html );
+		$clean_html = $this->hide_scripts( $clean_html );
+
 		$html = $this->remove_external_styles_from_html( $clean_html, $html );
+
 		return $this->remove_internal_styles_from_html( $clean_html, $html );
 	}
 
@@ -253,11 +380,10 @@ class UsedCSS {
 
 		foreach ( $link_styles as $style ) {
 			if (
-				(
-					! (bool) preg_match( '/rel=[\'"]?stylesheet[\'"]?/is', $style[0] )
-					&&
-					! ( (bool) preg_match( '/rel=[\'"]?preload[\'"]?/is', $style[0] ) && (bool) preg_match( '/as=[\'"]?style[\'"]?/is', $style[0] ) )
-				)
+
+				! (bool) preg_match( '/rel=[\'"]?stylesheet[\'"]?/is', $style[0] )
+				&&
+				! ( (bool) preg_match( '/rel=[\'"]?preload[\'"]?/is', $style[0] ) && (bool) preg_match( '/as=[\'"]?style[\'"]?/is', $style[0] ) )
 				||
 				( $preserve_google_font && strstr( $style['url'], '//fonts.googleapis.com/css' ) )
 			) {
@@ -296,7 +422,7 @@ class UsedCSS {
 			 *
 			 * @param array $inline_atts_exclusions Array of patterns used to match against the inline CSS attributes.
 			 */
-			(array) apply_filters( 'rocket_rucss_inline_atts_exclusions', $this->inline_atts_exclusions )
+			apply_filters( 'rocket_rucss_inline_atts_exclusions', $this->inline_atts_exclusions )
 		);
 
 		$inline_content_exclusions = $this->validate_array_and_quote(
@@ -307,7 +433,7 @@ class UsedCSS {
 			 *
 			 * @param array $inline_atts_exclusions Array of patterns used to match against the inline CSS content.
 			 */
-			(array) apply_filters( 'rocket_rucss_inline_content_exclusions', $this->inline_content_exclusions )
+			apply_filters( 'rocket_rucss_inline_content_exclusions', $this->inline_content_exclusions )
 		);
 
 		foreach ( $inline_styles as $style ) {
@@ -341,6 +467,7 @@ class UsedCSS {
 			}
 
 			$html = str_replace( $style[0], '', $html );
+
 		}
 
 		return $html;
@@ -402,8 +529,191 @@ class UsedCSS {
 	 */
 	private function is_mobile(): bool {
 		return $this->options->get( 'cache_mobile', 0 )
-			&& $this->options->get( 'do_caching_mobile_files', 0 )
-			&& wp_is_mobile();
+			&&
+			$this->options->get( 'do_caching_mobile_files', 0 )
+			&&
+			wp_is_mobile();
+	}
+
+	/**
+	 * Check if current page is the home page.
+	 *
+	 * @param string $url Current page url.
+	 *
+	 * @return bool
+	 */
+	private function is_home( string $url ): bool {
+		/**
+		 * Filters the home url.
+		 *
+		 * @since 3.11.4
+		 *
+		 * @param string  $home_url home url.
+		 * @param string  $url url of current page.
+		 */
+		$home_url = apply_filters( 'rocket_rucss_is_home_url', home_url(), $url );
+		return untrailingslashit( $url ) === untrailingslashit( $home_url );
+	}
+
+	/**
+	 * Process pending jobs inside cron iteration.
+	 *
+	 * @return void
+	 */
+	public function process_pending_jobs() {
+		Logger::debug( 'RUCSS: Start processing pending jobs inside cron.' );
+
+		if ( ! $this->is_enabled() ) {
+			Logger::debug( 'RUCSS: Stop processing cron iteration because option is disabled.' );
+
+			return;
+		}
+
+		// Get some items from the DB with status=pending & job_id isn't empty.
+
+		/**
+		 * Filters the pending jobs count.
+		 *
+		 * @since 3.11
+		 *
+		 * @param int $rows Number of rows to grab with each CRON iteration.
+		 */
+		$rows = apply_filters( 'rocket_rucss_pending_jobs_cron_rows_count', 100 );
+
+		Logger::debug( "RUCSS: Start getting number of {$rows} pending jobs." );
+
+		$pending_jobs = $this->used_css_query->get_pending_jobs( $rows );
+		if ( ! $pending_jobs ) {
+			Logger::debug( 'RUCSS: No pending jobs are there.' );
+
+			return;
+		}
+
+		foreach ( $pending_jobs as $used_css_row ) {
+			Logger::debug( "RUCSS: Send the job for url {$used_css_row->url} to Async task to check its job status." );
+
+			// Change status to in-progress.
+			$this->used_css_query->make_status_inprogress( (int) $used_css_row->id );
+
+			$this->queue->add_job_status_check_async( (int) $used_css_row->id );
+		}
+	}
+
+	/**
+	 * Check job status by DB row ID.
+	 *
+	 * @param int $id DB Row ID.
+	 *
+	 * @return void
+	 */
+	public function check_job_status( int $id ) {
+		Logger::debug( 'RUCSS: Start checking job status for row ID: ' . $id );
+
+		$row_details = $this->used_css_query->get_item( $id );
+		if ( ! $row_details ) {
+			Logger::debug( 'RUCSS: Row ID not found ', compact( 'id' ) );
+
+			// Nothing in DB, bailout.
+			return;
+		}
+
+		// Send the request to get the job status from SaaS.
+		$job_details = $this->api->get_queue_job_status( $row_details->job_id, $row_details->queue_name, $this->is_home( $row_details->url ) );
+		if (
+			200 !== $job_details['code']
+			||
+			empty( $job_details['contents'] )
+			||
+			! isset( $job_details['contents']['shakedCSS'] )
+		) {
+			Logger::debug( 'RUCSS: Job status failed for url: ' . $row_details->url, $job_details );
+
+			// Failure, check the retries number.
+			if ( $row_details->retries >= 3 ) {
+				Logger::debug( 'RUCSS: Job failed 3 times for url: ' . $row_details->url );
+
+				$this->used_css_query->make_status_failed( $id );
+
+				return;
+			}
+
+			// Increment the retries number with 1 and Change status to pending again.
+			$this->used_css_query->increment_retries( $id, $row_details->retries );
+			// @Todo: Maybe we can add this row to the async job to get the status before the next cron
+
+			return;
+		}
+
+		$css = $this->apply_font_display_swap( $job_details['contents']['shakedCSS'] );
+
+		$hash = md5( $css );
+
+		if ( ! $this->filesystem->write_used_css( $hash, $css ) ) {
+			Logger::error( 'RUCSS: Could not write used CSS to the filesystem: ' . $row_details->url );
+
+			$this->used_css_query->make_status_failed( $id );
+
+			return;
+		}
+
+		// Everything is fine, save the usedcss into DB, change status to completed and reset queue_name and job_id.
+		Logger::debug( 'RUCSS: Save used CSS for url: ' . $row_details->url );
+
+		$this->used_css_query->make_status_completed( $id, $hash );
+
+		/**
+		 * Fires after successfully saving the used CSS for an URL
+		 *
+		 * @param string $url URL used to generated the used CSS.
+		 * @param array  $job_details Result of the request to get the job status from SaaS.
+		 */
+		do_action( 'rocket_rucss_complete_job_status', $row_details->url, $job_details );
+
+	}
+
+	/**
+	 * Add clear UsedCSS adminbar item.
+	 *
+	 * @param WP_Admin_Bar $wp_admin_bar Adminbar object.
+	 *
+	 * @return void
+	 */
+	public function add_clear_usedcss_bar_item( WP_Admin_Bar $wp_admin_bar ) {
+		if ( 'local' === wp_get_environment_type() ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'rocket_remove_unused_css' ) ) {
+			return;
+		}
+
+		if ( is_admin() ) {
+			return;
+		}
+
+		if ( ! $this->can_optimize_url() ) {
+			return;
+		}
+
+		$referer = '';
+		$action  = 'rocket_clear_usedcss_url';
+
+		if ( ! empty( $_SERVER['REQUEST_URI'] ) ) {
+			$referer_url = filter_var( wp_unslash( $_SERVER['REQUEST_URI'] ), FILTER_SANITIZE_URL );
+			$referer     = '&_wp_http_referer=' . rawurlencode( remove_query_arg( 'fl_builder', $referer_url ) );
+		}
+
+		/**
+		 * Clear usedCSS for this URL (frontend).
+		 */
+		$wp_admin_bar->add_menu(
+			[
+				'parent' => 'wp-rocket',
+				'id'     => 'remove-usedcss-url',
+				'title'  => __( 'Clear Used CSS of this URL', 'rocket' ),
+				'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=' . $action . $referer ), 'remove_usedcss_url' ),
+			]
+		);
 	}
 
 	/**
@@ -463,18 +773,6 @@ class UsedCSS {
 			return $html;
 		}
 
-		/**
-		 * Filters the list of fonts to exclude from preload
-		 *
-		 * @since 3.15.10
-		 *
-		 * @param array $excluded_fonts_preload List of fonts to exclude from preload
-		 */
-		$exclude_fonts_preload = apply_filters( 'rocket_exclude_rucss_fonts_preload', [] );
-		if ( ! is_array( $exclude_fonts_preload ) ) {
-			$exclude_fonts_preload = [];
-		}
-
 		$urls = [];
 
 		foreach ( $font_faces as $font_face ) {
@@ -489,31 +787,12 @@ class UsedCSS {
 			 *
 			 * @since 3.11.4
 			 *
-			 * @param string $url url to be rewritten.
+			 * @param type  $url url to be rewritten.
 			 */
 			$font_url = apply_filters( 'rocket_font_url', $font_url );
 
 			if ( empty( $font_url ) ) {
 				continue;
-			}
-
-			// Making sure the excluded fonts array isn't empty to avoid excluding all fonts.
-			if ( ! empty( $exclude_fonts_preload ) ) {
-				// Combine the array elements into a single string with | as a separator and returning a pattern.
-				$exclude_fonts_preload_pattern = implode(
-					'|',
-					array_map(
-						function ( $item ) {
-							return is_string( $item ) ? preg_quote( $item, '/' ) : '';
-						},
-						$exclude_fonts_preload
-					)
-				);
-
-				// Check if the font URL matches any part of the exclude_fonts_preload array.
-				if ( ! empty( $exclude_fonts_preload_pattern ) && preg_match( '/' . $exclude_fonts_preload_pattern . '/i', $font_url ) ) {
-					continue; // Skip this iteration as the font URL is in the exclusion list.
-				}
 			}
 
 			$urls[] = $font_url;
@@ -543,7 +822,6 @@ class UsedCSS {
 	 * Remove preconnect tag for google api.
 	 *
 	 * @param string $html html content.
-	 *
 	 * @return string
 	 */
 	protected function remove_google_font_preconnect( string $html ): string {
@@ -615,21 +893,10 @@ class UsedCSS {
 		$links = '';
 
 		foreach ( $urls as $url ) {
-			$links .= '<link rel="preload" data-rocket-preload as="font" href="' . esc_url( $url ) . '" crossorigin>';
+			$links .= '<link rel="preload" as="font" href="' . esc_url( $url ) . '" crossorigin>';
 		}
 
 		return $links;
-	}
-
-	/**
-	 * Set Rucss inline attr exclusions
-	 *
-	 *  @return void
-	 */
-	private function set_inline_exclusions_lists() {
-		$wpr_dynamic_lists               = $this->data_manager->get_lists();
-		$this->inline_atts_exclusions    = isset( $wpr_dynamic_lists->rucss_inline_atts_exclusions ) ? $wpr_dynamic_lists->rucss_inline_atts_exclusions : [];
-		$this->inline_content_exclusions = isset( $wpr_dynamic_lists->rucss_inline_content_exclusions ) ? $wpr_dynamic_lists->rucss_inline_content_exclusions : [];
 	}
 
 	/**
@@ -681,12 +948,4 @@ class UsedCSS {
 		);
 	}
 
-	/**
-	 * Check if database has at least one completed row.
-	 *
-	 * @return bool
-	 */
-	public function has_one_completed_row_at_least() {
-		return $this->used_css_query->get_completed_count() > 0;
-	}
 }

@@ -12,6 +12,8 @@ defined( 'ABSPATH' ) || exit;
  * @return bool True to indicate should bypass; false otherwise.
  */
 function rocket_bypass() {
+	global $wp;
+
 	static $bypass = null;
 
 	if ( rocket_get_constant( 'WP_ROCKET_IS_TESTING', false ) ) {
@@ -22,7 +24,8 @@ function rocket_bypass() {
 		return $bypass;
 	}
 
-	$bypass = isset( $_GET['nowprocket'] ) && 0 !== $_GET['nowprocket']; // phpcs:ignore WordPress.Security.NonceVerification
+	$url    = wp_parse_url( add_query_arg( $wp->query_vars, home_url( $wp->request ) ) );
+	$bypass = isset( $url['query'] ) && false !== strpos( $url['query'], 'nowprocket' );
 
 	return $bypass;
 }

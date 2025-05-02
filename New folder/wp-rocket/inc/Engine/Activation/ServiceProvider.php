@@ -6,14 +6,20 @@ use WP_Rocket\Dependencies\League\Container\ServiceProvider\BootableServiceProvi
 use WP_Rocket\Engine\Cache\AdvancedCache;
 use WP_Rocket\Engine\Cache\WPCache;
 use WP_Rocket\Engine\Capabilities\Manager;
-use WP_Rocket\Engine\HealthCheck\ActionSchedulerCheck;
 
 /**
  * Service Provider for the activation process.
+ *
+ * @since 3.6.3
  */
 class ServiceProvider extends AbstractServiceProvider implements BootableServiceProviderInterface {
+
 	/**
-	 * Array of services provided by this service provider
+	 * The provides array is a way to let the container
+	 * know that a service is provided by this service
+	 * provider. Every service that is registered via
+	 * this service provider must have an alias added
+	 * to this array or it will be ignored.
 	 *
 	 * @var array
 	 */
@@ -21,26 +27,14 @@ class ServiceProvider extends AbstractServiceProvider implements BootableService
 		'advanced_cache',
 		'capabilities_manager',
 		'wp_cache',
-		'action_scheduler_check',
 	];
-
-	/**
-	 * Check if the service provider provides a specific service.
-	 *
-	 * @param string $id The id of the service.
-	 *
-	 * @return bool
-	 */
-	public function provides( string $id ): bool {
-		return in_array( $id, $this->provides, true );
-	}
 
 	/**
 	 * Executes this method when the service provider is registered
 	 *
 	 * @return void
 	 */
-	public function boot(): void {
+	public function boot() {
 		$this->getContainer()
 			->inflector( ActivationInterface::class )
 			->invokeMethod( 'activate', [] );
@@ -49,7 +43,7 @@ class ServiceProvider extends AbstractServiceProvider implements BootableService
 	/**
 	 * Registers the option array in the container.
 	 */
-	public function register(): void {
+	public function register() {
 		$filesystem = rocket_direct_filesystem();
 
 		$this->getContainer()->add( 'advanced_cache', AdvancedCache::class )
@@ -58,6 +52,5 @@ class ServiceProvider extends AbstractServiceProvider implements BootableService
 		$this->getContainer()->add( 'capabilities_manager', Manager::class );
 		$this->getContainer()->add( 'wp_cache', WPCache::class )
 			->addArgument( $filesystem );
-		$this->getContainer()->add( 'action_scheduler_check', ActionSchedulerCheck::class );
 	}
 }

@@ -16,7 +16,6 @@
 	display: flex;
 	justify-content: center;
 	align-items: center;
-	z-index: 100;
 }
 
 .wpr-modal-container {
@@ -68,8 +67,4 @@
 
 .wpr-modal-confirm:hover {
 	box-shadow: none;
-}
-
-.wpr-modal .wpr-sub-list {
-	padding-left: 25px;
 }

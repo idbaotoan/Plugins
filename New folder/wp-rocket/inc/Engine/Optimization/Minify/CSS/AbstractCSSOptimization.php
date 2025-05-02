@@ -126,8 +126,8 @@ abstract class AbstractCSSOptimization extends AbstractOptimization {
 		}
 
 		$file      = wp_parse_url( $tag['url'] );
-		$file_path = isset( $file['path'] ) ? $file['path'] : '';
-		$host      = isset( $file['host'] ) ? $file['host'] : '';
+		$file_path = isset( $file['path'] ) ? $file['path'] : null;
+		$host      = isset( $file['host'] ) ? $file['host'] : null;
 
 		// File extension is not css.
 		if ( pathinfo( $file_path, PATHINFO_EXTENSION ) !== self::FILE_TYPE ) {
@@ -151,4 +151,5 @@ abstract class AbstractCSSOptimization extends AbstractOptimization {
 
 		return false;
 	}
+
 }

@@ -39,16 +39,8 @@ defined( 'ABSPATH' ) || exit;
 	</fieldset>
 
 	<?php if ( ! empty( $data['helper'] ) ) : ?>
-		<?php if ( is_array( $data['helper'] ) ) : ?>
-				<?php foreach ( $data['helper'] as $rocket_helper ) : ?>
-						<div class="wpr-fieldsContainer-helper wpr-icon-important">
-							<?php echo $rocket_helper; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Dynamic content is properly escaped in the view. ?>
-						</div>
-				<?php endforeach; ?>
-		<?php else : ?>
-			<div class="wpr-fieldsContainer-helper wpr-icon-important">
-				<?php echo $data['helper']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Dynamic content is properly escaped in the view. ?>
-			</div>
-		<?php endif; ?>
+		<div class="wpr-fieldsContainer-helper wpr-icon-important">
+			<?php echo $data['helper']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Dynamic content is properly escaped in the view. ?>
+		</div>
 	<?php endif; ?>
 </div>

@@ -11,15 +11,9 @@ add_action( 'update_option_secupress_users-login_settings', 'rocket_after_update
  * @author Remy Perona
  *
  * @param array $urls URLs to exclude from cache.
- * @param bool  $show_safe_content show sensitive uris.
  * @return array Updated URLs to exclude
  */
-function rocket_exclude_secupress_move_login( $urls, $show_safe_content = true ) {
-
-	if ( ! $show_safe_content ) {
-		return $urls;
-	}
-
+function rocket_exclude_secupress_move_login( $urls ) {
 	if ( ! function_exists( 'secupress_move_login_get_slugs' ) ) {
 		return $urls;
 	}
@@ -33,7 +27,7 @@ function rocket_exclude_secupress_move_login( $urls, $show_safe_content = true )
 
 	return $urls;
 }
-add_filter( 'rocket_cache_reject_uri', 'rocket_exclude_secupress_move_login', 2, 2 );
+add_filter( 'rocket_cache_reject_uri', 'rocket_exclude_secupress_move_login' );
 
 /**
  * Add SecuPress move login pages to cache exclusion when activating the plugin
@@ -55,7 +49,7 @@ add_action( 'secupress.plugins.activation', 'rocket_maybe_activate_secupress', 1
  * @author Remy Perona
  */
 function rocket_activate_secupress() {
-	add_filter( 'rocket_cache_reject_uri', 'rocket_exclude_secupress_move_login', 2, 2 );
+	add_filter( 'rocket_cache_reject_uri', 'rocket_exclude_secupress_move_login' );
 
 	// Update the WP Rocket rules on the .htaccess.
 	flush_rocket_htaccess();

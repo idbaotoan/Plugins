@@ -22,6 +22,7 @@ class Tests {
 	 *
 	 * @var    array
 	 * @since  3.3
+	 * @access private
 	 * @author Grégory Viguier
 	 */
 	private static $cookies;
@@ -31,6 +32,7 @@ class Tests {
 	 *
 	 * @var    array
 	 * @since  3.3
+	 * @access private
 	 * @author Grégory Viguier
 	 */
 	private static $post;
@@ -40,6 +42,7 @@ class Tests {
 	 *
 	 * @var    array
 	 * @since  3.3
+	 * @access private
 	 * @author Grégory Viguier
 	 */
 	private static $get;
@@ -49,6 +52,7 @@ class Tests {
 	 *
 	 * @var    array Tests are listed as array keys.
 	 * @since  3.3
+	 * @access private
 	 * @author Grégory Viguier
 	 */
 	private $tests = [
@@ -74,6 +78,7 @@ class Tests {
 	 *     @type array  $data    Related data.
 	 * }
 	 * @since  3.3
+	 * @access private
 	 * @author Grégory Viguier
 	 */
 	private $last_error = [];
@@ -82,6 +87,7 @@ class Tests {
 	 * Constructor.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @param Config $config Config instance.
@@ -133,11 +139,15 @@ class Tests {
 	/** ----------------------------------------------------------------------------------------- */
 
 	/**
-	 * Tell if any buffer process should be initiated.
+	 * Tell if the process should be initiated.
+	 *
+	 * @since  3.3
+	 * @access public
+	 * @author Grégory Viguier
 	 *
 	 * @return bool
 	 */
-	public function can_process_any_buffer() {
+	public function can_init_process() {
 		$this->last_error = [];
 
 		// Don't process robots.txt && .htaccess files (it has happened sometimes with weird server configuration).
@@ -175,22 +185,6 @@ class Tests {
 			return false;
 		}
 
-		return true;
-	}
-
-	/**
-	 * Tell if the process should be initiated.
-	 *
-	 * @since  3.3
-	 * @author Grégory Viguier
-	 *
-	 * @return bool
-	 */
-	public function can_init_process() {
-		if ( ! $this->can_process_any_buffer() ) {
-			return false;
-		}
-
 		if ( ! $this->has_test() ) {
 			$this->last_error = [];
 			return true;
@@ -210,7 +204,7 @@ class Tests {
 
 		// Don’t process with query strings parameters, but the processed content is served if the visitor comes from an RSS feed, a Facebook action or Google Adsense tracking.
 		if ( $this->has_test( 'query_string' ) && ! $this->can_process_query_string() ) {
-			$this->set_error( 'Query string URL is excluded.' . PHP_EOL . print_r( $_GET, true ) );// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r, WordPress.Security.NonceVerification.Recommended
+			$this->set_error( 'Query string URL is excluded.' );
 			return false;
 		}
 
@@ -279,6 +273,7 @@ class Tests {
 	 * Tell if a test should be performed.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @param  string $test_name Identifier of the test.
@@ -297,6 +292,7 @@ class Tests {
 	 * Set the list of tests to perform.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @param array $tests An array of test names.
@@ -311,6 +307,7 @@ class Tests {
 	 * Tell if the buffer should be processed.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @param  string $buffer The buffer content.
@@ -393,6 +390,7 @@ class Tests {
 	 * Tell if the current URI corresponds to a file that must not be processed.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -426,6 +424,7 @@ class Tests {
 	 * Tell if the current URI corresponds to a file extension that must not be processed.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -474,6 +473,7 @@ class Tests {
 	 * Test against ajax added in 2e3c0fa74246aa13b36835f132dfd55b90d4bf9e for whatever reason.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -487,6 +487,7 @@ class Tests {
 	 * Test added in 769c7377e764a6a8decb4015a167b34043b4b462 for whatever reason.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -499,6 +500,7 @@ class Tests {
 	 * Tell if the request method is allowed to be cached.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -524,6 +526,7 @@ class Tests {
 	 * Don't process with query string parameters, some parameters are allowed though.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -568,6 +571,7 @@ class Tests {
 	 * Process SSL only if set in the plugin settings.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -580,6 +584,7 @@ class Tests {
 	 * Some URIs set in the plugin settings must not be processed.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -605,6 +610,7 @@ class Tests {
 	 * Don't process if some cookies are present.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool|array
@@ -643,6 +649,7 @@ class Tests {
 	 * Don't process if some cookies are NOT present.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool|array
@@ -681,6 +688,7 @@ class Tests {
 	 * Don't process if the user agent is in the forbidden list.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -709,6 +717,7 @@ class Tests {
 	 * Don't process if the user agent is in the forbidden list.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -750,6 +759,7 @@ class Tests {
 	 * When defined, the page must not be cached.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -775,6 +785,7 @@ class Tests {
 	 * Tell if we're in the WP’s 404 page.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -787,6 +798,7 @@ class Tests {
 	 * Tell if we're in the WP’s search page.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -827,6 +839,7 @@ class Tests {
 	 * Get the IP address from which the user is viewing the current page.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 */
 	public function get_ip() {
@@ -866,6 +879,7 @@ class Tests {
 	 * Tell if the request comes from a speed test tool.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -961,6 +975,7 @@ class Tests {
 	 * This is basically a copy of the WP function, where $_SERVER is not used directly.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool True if SSL, otherwise false.
@@ -988,6 +1003,7 @@ class Tests {
 	 * Get the request URI.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return string
@@ -1004,6 +1020,7 @@ class Tests {
 	 * Get the request URI without the query strings.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return string
@@ -1024,13 +1041,13 @@ class Tests {
 	 * Get the request URI. The query string is sorted and some parameters are removed.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return string
 	 */
 	public function get_clean_request_uri() {
 		$request_uri = $this->get_request_uri_base();
-		$request_uri = $this->remove_dot_segments( $request_uri );
 
 		if ( ! $request_uri ) {
 			return '';
@@ -1049,6 +1066,7 @@ class Tests {
 	 * Get the request method.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return string
@@ -1061,78 +1079,6 @@ class Tests {
 		return strtoupper( $this->config->get_server_input( 'REQUEST_METHOD' ) );
 	}
 
-	/**
-	 * Remove dot segments from a path
-	 *
-	 * @param string $input Path to process.
-	 *
-	 * @return string
-	 */
-	private function remove_dot_segments( string $input ) {
-		$output = '';
-
-		while ( strpos( $input, './' ) !== false || strpos( $input, '/.' ) !== false || '.' === $input || '..' === $input ) {
-			/**
-			 * A: If the input buffer begins with a prefix of "../" or "./",
-			 * then remove that prefix from the input buffer; otherwise,
-			 */
-			if ( strpos( $input, '../' ) === 0 ) {
-				$input = substr( $input, 3 );
-			}
-			elseif ( strpos( $input, './' ) === 0 ) {
-				$input = substr( $input, 2 );
-			}
-			/**
-			 * B: if the input buffer begins with a prefix of "/./" or "/.",
-			 * where "." is a complete path segment, then replace that prefix
-			 * with "/" in the input buffer; otherwise,
-			 */
-			elseif ( strpos( $input, '/./' ) === 0 ) {
-				$input = substr( $input, 2 );
-			}
-			elseif ( '/.' === $input ) {
-				$input = '/';
-			}
-			/**
-			 * C: if the input buffer begins with a prefix of "/../" or "/..",
-			 * where ".." is a complete path segment, then replace that prefix
-			 * with "/" in the input buffer and remove the last segment and its
-			 * preceding "/" (if any) from the output buffer; otherwise,
-			 */
-			elseif ( strpos( $input, '/../' ) === 0 ) {
-				$input  = substr( $input, 3 );
-				$output = substr_replace( $output, '', strrpos( $output, '/' ) );
-			}
-			elseif ( '/..' === $input ) {
-				$input  = '/';
-				$output = substr_replace( $output, '', strrpos( $output, '/' ) );
-			}
-			/**
-			 * D: if the input buffer consists only of "." or "..", then remove
-			 * that from the input buffer; otherwise,
-			 */
-			elseif ( '.' === $input || '..' === $input ) {
-				$input = '';
-			}
-			/**
-			 * E: move the first path segment in the input buffer to the end of
-			 * the output buffer, including the initial "/" character (if any)
-			 * and any subsequent characters up to, but not including, the next
-			 * "/" character or the end of the input buffer
-			 */
-			elseif ( strpos( $input, '/', 1 ) !== false ) {
-				$pos     = strpos( $input, '/', 1 );
-				$output .= substr( $input, 0, $pos );
-				$input   = substr_replace( $input, '', 0, $pos );
-			}
-			else {
-				$output .= $input;
-				$input   = '';
-			}
-		}
-		return $output . $input;
-	}
-
 	/** ----------------------------------------------------------------------------------------- */
 	/** QUERY STRING ============================================================================ */
 	/** ----------------------------------------------------------------------------------------- */
@@ -1141,6 +1087,7 @@ class Tests {
 	 * Get the query string as an array. Parameters are sorted and some are removed.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return array
@@ -1167,6 +1114,7 @@ class Tests {
 	 * Get the query string with sorted parameters, and some other removed.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return string
@@ -1194,6 +1142,7 @@ class Tests {
 	 * Get the `cookies` property.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return array
@@ -1206,6 +1155,7 @@ class Tests {
 	 * Get the `post` property.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return array
@@ -1218,6 +1168,7 @@ class Tests {
 	 * Get the `get` property.
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return array
@@ -1234,6 +1185,7 @@ class Tests {
 	 * Set an "error".
 	 *
 	 * @since  3.3
+	 * @access protected
 	 * @author Grégory Viguier
 	 *
 	 * @param string $message A message.
@@ -1250,6 +1202,7 @@ class Tests {
 	 * Get the last "error".
 	 *
 	 * @since  3.3
+	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return array

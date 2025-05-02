@@ -16,14 +16,7 @@ function rocket_admin_bar( $wp_admin_bar ) {
 	global $pagenow, $post;
 
 	if ( ! empty( $_SERVER['REQUEST_URI'] ) ) {
-		$uri = filter_var( wp_unslash( $_SERVER['REQUEST_URI'], FILTER_SANITIZE_URL ) );
-		/**
-		 * Filters to act on the referer url for the admin bar.
-		 *
-		 * @param string $uri Current uri
-		 */
-		$referer = (string) apply_filters( 'rocket_admin_bar_referer', $uri );
-		$referer = esc_url_raw( $referer );
+		$referer = filter_var( wp_unslash( $_SERVER['REQUEST_URI'] ), FILTER_SANITIZE_URL );
 		$referer = '&_wp_http_referer=' . rawurlencode( remove_query_arg( 'fl_builder', $referer ) );
 	} else {
 		$referer = '';
@@ -88,11 +81,9 @@ function rocket_admin_bar( $wp_admin_bar ) {
 					[
 						'parent' => 'wp-rocket',
 						'id'     => 'purge-all',
-						'title'  => (bool) get_rocket_option( 'manual_preload', false ) ? __( 'Clear and preload cache', 'rocket' ) : __( 'Clear cache', 'rocket' ),
+						'title'  => __( 'Clear cache', 'rocket' ),
 					]
 				);
-
-				$langlinks_default = [];
 
 				// Add submenu for each active langs.
 				switch ( $i18n_plugin ) {
@@ -109,19 +100,21 @@ function rocket_admin_bar( $wp_admin_bar ) {
 						$langlinks = get_rocket_polylang_langs_for_admin_bar();
 						break;
 					default:
-						/**
-						 * Filters the value of the lang links menu
-						 *
-						 * @param array $langlinks Array of languages.
-						 */
-						$langlinks = apply_filters( 'rocket_i18n_admin_bar_menu', [] );
-
-						if ( ! is_array( $langlinks ) ) {
-							$langlinks = $langlinks_default;
-						}
+						$langlinks = [];
 				}
 
 				if ( $langlinks ) {
+					foreach ( $langlinks as $lang ) {
+						$wp_admin_bar->add_menu(
+							[
+								'parent' => 'purge-all',
+								'id'     => 'purge-all-' . $lang['code'],
+								'title'  => $lang['flag'] . '&nbsp;' . $lang['anchor'],
+								'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=' . $action . '&type=all&lang=' . $lang['code'] . $referer ), $action . '_all' ),
+							]
+						);
+					}
+
 					if ( 'wpml' !== $i18n_plugin ) {
 						// Add subemnu "All langs" (the one for WPML is already printed).
 						$wp_admin_bar->add_menu(
@@ -133,17 +126,6 @@ function rocket_admin_bar( $wp_admin_bar ) {
 							]
 						);
 					}
-
-					foreach ( $langlinks as $lang ) {
-						$wp_admin_bar->add_menu(
-							[
-								'parent' => 'purge-all',
-								'id'     => 'purge-all-' . $lang['code'],
-								'title'  => $lang['flag'] . '&nbsp;' . $lang['anchor'],
-								'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=' . $action . '&type=all&lang=' . $lang['code'] . $referer ), $action . '_all' ),
-							]
-						);
-					}
 				}
 			} else {
 				// Purge All.
@@ -151,7 +133,7 @@ function rocket_admin_bar( $wp_admin_bar ) {
 					[
 						'parent' => 'wp-rocket',
 						'id'     => 'purge-all',
-						'title'  => (bool) get_rocket_option( 'manual_preload', false ) ? __( 'Clear and preload cache', 'rocket' ) : __( 'Clear cache', 'rocket' ),
+						'title'  => __( 'Clear cache', 'rocket' ),
 						'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=' . $action . '&type=all' . $referer ), $action . '_all' ),
 					]
 				);
@@ -165,7 +147,7 @@ function rocket_admin_bar( $wp_admin_bar ) {
 			 * @param bool  $should_skip Should skip adding clear post to rocket option in admin bar.
 			 * @param type  $post Post object.
 			 */
-			if ( ! apply_filters( 'rocket_skip_admin_bar_cache_purge_option', false, $post ) && rocket_can_display_options() ) {
+			if ( ! apply_filters( 'rocket_skip_admin_bar_cache_purge_option', false, $post ) ) {
 				if ( is_admin() ) {
 					/**
 					 * Purge a post.
@@ -213,6 +195,84 @@ function rocket_admin_bar( $wp_admin_bar ) {
 					'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=' . $action . $referer ), $action ),
 				]
 			);
+		}
+	}
+
+	if ( current_user_can( 'rocket_preload_cache' ) ) {
+		/**
+		 * Cache Preload.
+		 */
+		$action = 'preload';
+
+		// Go robot gogo!
+		if ( get_rocket_option( 'manual_preload', 0 ) ) {
+			$i18n_plugin = rocket_has_i18n();
+
+			if ( $i18n_plugin ) {
+				// Parent.
+				$wp_admin_bar->add_menu(
+					[
+						'parent' => 'wp-rocket',
+						'id'     => 'preload-cache',
+						'title'  => __( 'Preload cache', 'rocket' ),
+					]
+				);
+
+				// Add submenu for each active langs.
+				if ( ! isset( $langlinks ) ) {
+					switch ( $i18n_plugin ) {
+						case 'wpml':
+							$langlinks = get_rocket_wpml_langs_for_admin_bar();
+							break;
+						case 'qtranslate':
+							$langlinks = get_rocket_qtranslate_langs_for_admin_bar();
+							break;
+						case 'qtranslate-x':
+							$langlinks = get_rocket_qtranslate_langs_for_admin_bar( 'x' );
+							break;
+						case 'polylang':
+							$langlinks = get_rocket_polylang_langs_for_admin_bar();
+							break;
+						default:
+							$langlinks = [];
+					}
+				}
+
+				if ( $langlinks ) {
+					foreach ( $langlinks as $lang ) {
+						$wp_admin_bar->add_menu(
+							[
+								'parent' => 'preload-cache',
+								'id'     => 'preload-cache-' . $lang['code'],
+								'title'  => $lang['flag'] . '&nbsp;' . $lang['anchor'],
+								'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=' . $action . '&lang=' . $lang['code'] . $referer ), $action ),
+							]
+						);
+					}
+
+					if ( 'wpml' !== $i18n_plugin ) {
+						// Add subemnu "All langs" (the one for WPML is already printed).
+						$wp_admin_bar->add_menu(
+							[
+								'parent' => 'preload-cache',
+								'id'     => 'preload-cache-all',
+								'title'  => '<div class="dashicons-before dashicons-admin-site" style="line-height:1.5;"> ' . __( 'All languages', 'rocket' ) . '</div>',
+								'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=' . $action . '&lang=all' . $referer ), $action ),
+							]
+						);
+					}
+				}
+			} else {
+				// Preload All.
+				$wp_admin_bar->add_menu(
+					[
+						'parent' => 'wp-rocket',
+						'id'     => 'preload-cache',
+						'title'  => __( 'Preload cache', 'rocket' ),
+						'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=' . $action . $referer ), $action ),
+					]
+				);
+			}
 		}
 	}
 

@@ -4,11 +4,8 @@ namespace WP_Rocket\Engine\Admin\Settings;
 use WP_Rocket\Engine\Admin\Database\Optimization;
 use WP_Rocket\Engine\Admin\Beacon\Beacon;
 use WP_Rocket\Engine\License\API\UserClient;
-use WP_Rocket\Engine\Optimization\DelayJS\Admin\SiteList;
 use WP_Rocket\Interfaces\Render_Interface;
 use WP_Rocket\Engine\Optimization\DelayJS\Admin\Settings as DelayJSSettings;
-use WP_Rocket\Abstract_Render;
-use WP_Rocket\Admin\Options_Data;
 
 /**
  * Registers the admin page and WP Rocket settings.
@@ -16,7 +13,7 @@ use WP_Rocket\Admin\Options_Data;
  * @since 3.5.5 Moves into the new architecture.
  * @since 3.0
  */
-class Page extends Abstract_Render {
+class Page {
 	/**
 	 * Plugin slug.
 	 *
@@ -88,20 +85,6 @@ class Page extends Abstract_Render {
 	private $user_client;
 
 	/**
-	 * Delay JS Site List controller.
-	 *
-	 * @var SiteList
-	 */
-	protected $delayjs_sitelist;
-
-	/**
-	 * WP Rocket options instance
-	 *
-	 * @var Options_Data
-	 */
-	private $options;
-
-	/**
 	 * Creates an instance of the Page object.
 	 *
 	 * @since 3.0
@@ -112,22 +95,8 @@ class Page extends Abstract_Render {
 	 * @param Beacon           $beacon      Beacon instance.
 	 * @param Optimization     $optimize    Database optimization instance.
 	 * @param UserClient       $user_client User client instance.
-	 * @param SiteList         $delayjs_sitelist User client instance.
-	 * @param string           $template_path Path to views.
-	 * @param Options_Data     $options       WP Rocket options instance.
 	 */
-	public function __construct(
-		array $args,
-		Settings $settings,
-		Render_Interface $render,
-		Beacon $beacon,
-		Optimization $optimize,
-		UserClient $user_client,
-		SiteList $delayjs_sitelist,
-		$template_path,
-		Options_Data $options
-	) {
-		parent::__construct( $template_path );
+	public function __construct( array $args, Settings $settings, Render_Interface $render, Beacon $beacon, Optimization $optimize, UserClient $user_client ) {
 		$args = array_merge(
 			[
 				'slug'       => 'wprocket',
@@ -137,16 +106,14 @@ class Page extends Abstract_Render {
 			$args
 		);
 
-		$this->slug             = $args['slug'];
-		$this->title            = $args['title'];
-		$this->capability       = $args['capability'];
-		$this->settings         = $settings;
-		$this->render           = $render;
-		$this->beacon           = $beacon;
-		$this->optimize         = $optimize;
-		$this->user_client      = $user_client;
-		$this->delayjs_sitelist = $delayjs_sitelist;
-		$this->options          = $options;
+		$this->slug        = $args['slug'];
+		$this->title       = $args['title'];
+		$this->capability  = $args['capability'];
+		$this->settings    = $settings;
+		$this->render      = $render;
+		$this->beacon      = $beacon;
+		$this->optimize    = $optimize;
+		$this->user_client = $user_client;
 	}
 
 	/**
@@ -200,6 +167,7 @@ class Page extends Abstract_Render {
 		$rocket_valid_key = rocket_valid_key();
 		if ( $rocket_valid_key ) {
 			$this->dashboard_section();
+			$this->cache_section();
 			$this->assets_section();
 			$this->media_section();
 			$this->preload_section();
@@ -276,25 +244,34 @@ class Page extends Abstract_Render {
 	public function customer_data() {
 		$user = $this->user_client->get_user_data();
 		$data = [
-			'license_type'        => __( 'Unavailable', 'rocket' ),
-			'license_expiration'  => __( 'Unavailable', 'rocket' ),
-			'license_class'       => 'wpr-isInvalid',
-			'is_from_one_dot_com' => false,
+			'license_type'        => __( 'Infinite', 'rocket' ),
+			'license_expiration'  => $date = date('M d, Y', strtotime('+1 years')),
+			'license_class'       => 'wpr-isValid',
 		];
 
-		$data['license_type'] = rocket_get_license_type( $user );
-
-		if ( ! empty( $user->licence_expiration ) ) {
-			$data['license_class'] = time() < $user->licence_expiration ? 'wpr-isValid' : 'wpr-isInvalid';
+		if (
+			false === $user
+			||
+			! isset( $user->licence_account, $user->licence_expiration )
+		) {
+			return $data;
 		}
 
-		if ( ! empty( $user->licence_expiration ) ) {
-			$data['license_expiration'] = date_i18n( get_option( 'date_format' ), (int) $user->licence_expiration );
+		if (
+			1 <= $user->licence_account
+			&&
+			$user->licence_account < 3
+		) {
+			$data['license_type'] = 'Single';
+		} elseif ( -1 === (int) $user->licence_account ) {
+			$data['license_type'] = 'Infinite';
+		} else {
+			$data['license_type'] = 'Plus';
 		}
 
-		if ( isset( $user->{'has_one-com_account'} ) ) {
-			$data['is_from_one_dot_com'] = (bool) $user->{'has_one-com_account'};
-		}
+		$data['license_class']       = time() < $user->licence_expiration ? 'wpr-isValid' : 'wpr-isInvalid';
+		$data['license_expiration']  = date_i18n( get_option( 'date_format' ), (int) $user->licence_expiration );
+		//$data['is_from_one_dot_com'] = (bool) $user->{'has_one-com_account'};
 
 		return $data;
 	}
@@ -320,7 +297,6 @@ class Page extends Abstract_Render {
 			'sucury_waf_cache_sync'       => 1,
 			'sucury_waf_api_key'          => 1,
 			'cache_webp'                  => 1,
-			'cache_logged_user'           => 1,
 		];
 
 		if ( ! isset( $_POST['option']['name'] ) || ! isset( $allowed[ $_POST['option']['name'] ] ) ) {
@@ -453,6 +429,124 @@ class Page extends Abstract_Render {
 	}
 
 	/**
+	 * Registers Cache section.
+	 *
+	 * @since 3.0
+	 */
+	private function cache_section() {
+		$mobile_cache_beacon = $this->beacon->get_suggest( 'mobile_cache' );
+		$user_cache_beacon   = $this->beacon->get_suggest( 'user_cache' );
+		$nonce_beacon        = $this->beacon->get_suggest( 'nonce' );
+		$cache_life_beacon   = $this->beacon->get_suggest( 'cache_lifespan' );
+
+		$this->settings->add_page_section(
+			'cache',
+			[
+				'title'            => __( 'Cache', 'rocket' ),
+				'menu_description' => __( 'Basic cache options', 'rocket' ),
+			]
+		);
+
+		$this->settings->add_settings_sections(
+			[
+				'mobile_cache_section' => [
+					'title'       => __( 'Mobile Cache', 'rocket' ),
+					'type'        => 'fields_container',
+					'description' => __( 'Speed up your site for mobile visitors.', 'rocket' ),
+					'help'        => [
+						'url' => $mobile_cache_beacon['url'],
+						'id'  => $this->beacon->get_suggest( 'mobile_cache_section' ),
+					],
+					'helper'      => rocket_is_mobile_plugin_active() ? __( 'We detected you use a plugin that requires a separate cache for mobile, and automatically enabled this option for compatibility.', 'rocket' ) : '',
+					'page'        => 'cache',
+				],
+				'user_cache_section'   => [
+					'title'       => __( 'User Cache', 'rocket' ),
+					'type'        => 'fields_container',
+					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
+					'description' => sprintf( __( '%1$sUser cache%2$s is great when you have user-specific or restricted content on your website.', 'rocket' ), '<a href="' . esc_url( $user_cache_beacon['url'] ) . '" data-beacon-article="' . esc_attr( $user_cache_beacon['id'] ) . '" target="_blank">', '</a>' ),
+					'help'        => [
+						'url' => $user_cache_beacon['url'],
+						'id'  => $this->beacon->get_suggest( 'user_cache_section' ),
+					],
+					'page'        => 'cache',
+				],
+				'cache_lifespan'       => [
+					'title'       => __( 'Cache Lifespan', 'rocket' ),
+					'type'        => 'fields_container',
+					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
+					'description' => sprintf( __( 'Cache files older than the specified lifespan will be deleted.<br>Enable %1$spreloading%2$s for the cache to be rebuilt automatically after lifespan expiration.', 'rocket' ), '<a href="#preload">', '</a>' ),
+					'help'        => [
+						'url' => $cache_life_beacon['url'],
+						'id'  => $this->beacon->get_suggest( 'cache_lifespan_section' ),
+					],
+					'page'        => 'cache',
+				],
+			]
+		);
+
+		$this->settings->add_settings_fields(
+			[
+				'cache_logged_user'       => [
+					'type'              => 'checkbox',
+					'label'             => __( 'Enable caching for logged-in WordPress users', 'rocket' ),
+					'section'           => 'user_cache_section',
+					'page'              => 'cache',
+					'default'           => 0,
+					'sanitize_callback' => 'sanitize_checkbox',
+				],
+				'cache_mobile'            => [
+					'type'              => 'checkbox',
+					'label'             => __( 'Enable caching for mobile devices', 'rocket' ),
+					'container_class'   => [
+						rocket_is_mobile_plugin_active() ? 'wpr-isDisabled' : '',
+						'wpr-isParent',
+					],
+					'section'           => 'mobile_cache_section',
+					'page'              => 'cache',
+					'default'           => 1,
+					'sanitize_callback' => 'sanitize_checkbox',
+					'input_attr'        => [
+						'disabled' => rocket_is_mobile_plugin_active() ? 1 : 0,
+					],
+				],
+				'do_caching_mobile_files' => [
+					'type'              => 'checkbox',
+					'label'             => __( 'Separate cache files for mobile devices', 'rocket' ),
+					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
+					'description'       => sprintf( __( 'Most modern themes are responsive and should work without a separate cache. Enable this only if you have a dedicated mobile theme or plugin. %1$sMore info%2$s', 'rocket' ), '<a href="' . esc_url( $mobile_cache_beacon['url'] ) . '" data-beacon-article="' . esc_attr( $mobile_cache_beacon['id'] ) . '" target="_blank">', '</a>' ),
+					'container_class'   => [
+						rocket_is_mobile_plugin_active() ? 'wpr-isDisabled' : '',
+						'wpr-field--children',
+					],
+					'parent'            => 'cache_mobile',
+					'section'           => 'mobile_cache_section',
+					'page'              => 'cache',
+					'default'           => 0,
+					'sanitize_callback' => 'sanitize_checkbox',
+					'input_attr'        => [
+						'disabled' => rocket_is_mobile_plugin_active() ? 1 : 0,
+					],
+				],
+				'purge_cron_interval'     => [
+					'type'              => 'cache_lifespan',
+					'label'             => __( 'Specify time after which the global cache is cleared<br>(0 = unlimited )', 'rocket' ),
+					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
+					'description'       => sprintf( __( 'Reduce lifespan to 10 hours or less if you notice issues that seem to appear periodically. %1$sWhy?%2$s', 'rocket' ), '<a href="' . esc_url( $nonce_beacon['url'] ) . '" data-beacon-article="' . esc_attr( $nonce_beacon['id'] ) . '" target="_blank">', '</a>' ),
+					'section'           => 'cache_lifespan',
+					'page'              => 'cache',
+					'default'           => 10,
+					'sanitize_callback' => 'sanitize_cache_lifespan',
+					'choices'           => [
+						'HOUR_IN_SECONDS' => __( 'Hours', 'rocket' ),
+						'DAY_IN_SECONDS'  => __( 'Days', 'rocket' ),
+					],
+				],
+			]
+		);
+	}
+
+	/**
 	 * Registers CSS & Javascript section.
 	 *
 	 * @since 3.0
@@ -464,7 +558,6 @@ class Page extends Abstract_Render {
 		$files_beacon               = $this->beacon->get_suggest( 'file_optimization' );
 		$inline_js_beacon           = $this->beacon->get_suggest( 'exclude_inline_js' );
 		$exclude_js_beacon          = $this->beacon->get_suggest( 'exclude_js' );
-		$exclude_css_beacon         = $this->beacon->get_suggest( 'exclude_css' );
 		$delay_js_beacon            = $this->beacon->get_suggest( 'delay_js' );
 		$delay_js_exclusions_beacon = $this->beacon->get_suggest( 'delay_js_exclusions' );
 		$exclude_defer_js           = $this->beacon->get_suggest( 'exclude_defer_js' );
@@ -476,20 +569,7 @@ class Page extends Abstract_Render {
 		$disable_combine_css = $this->disable_combine_css();
 		$disable_ocd         = 'local' === wp_get_environment_type();
 
-		/**
-		 * Filters the status of the RUCSS option.
-		 *
-		 * @param array $should_disable will return array with disable status and text.
-		 */
-		$rucss_status = apply_filters(
-			'rocket_disable_rucss_setting',
-			[
-				'disable' => false,
-				'text'    => '',
-			]
-		);
-
-		$invalid_license = get_option( 'wp_rocket_no_licence' );
+		//$invalid_license = get_transient( 'wp_rocket_no_licence' );
 
 		$this->settings->add_page_section(
 			'file_optimization',
@@ -498,17 +578,6 @@ class Page extends Abstract_Render {
 				'menu_description' => __( 'Optimize CSS & JS', 'rocket' ),
 			]
 		);
-
-		$css_section_helper = [];
-
-		if ( rocket_maybe_disable_minify_css() ) {
-			// translators: %1$s = type of minification (HTML, CSS or JS), %2$s = “WP Rocket”.
-			$css_section_helper[] = sprintf( __( '%1$s Minification is currently activated in <strong>Autoptimize</strong>. If you want to use %2$s’s minification, disable this option in Autoptimize.', 'rocket' ), 'CSS', WP_ROCKET_PLUGIN_NAME );
-		}
-
-		if ( $rucss_status['disable'] ) {
-			$css_section_helper[] = $rucss_status['text'];
-		}
 
 		$this->settings->add_settings_sections(
 			[
@@ -519,7 +588,8 @@ class Page extends Abstract_Render {
 						'url' => $files_beacon['url'],
 					],
 					'page'   => 'file_optimization',
-					'helper' => $css_section_helper,
+					// translators: %1$s = type of minification (HTML, CSS or JS), %2$s = “WP Rocket”.
+					'helper' => rocket_maybe_disable_minify_css() ? sprintf( __( '%1$s Minification is currently activated in <strong>Autoptimize</strong>. If you want to use %2$s’s minification, disable those options in Autoptimize.', 'rocket' ), 'CSS', WP_ROCKET_PLUGIN_NAME ) : '',
 				],
 				'js'  => [
 					'title'  => __( 'JavaScript Files', 'rocket' ),
@@ -534,19 +604,16 @@ class Page extends Abstract_Render {
 			]
 		);
 
-		$delay_js_list_helper  = esc_html__( 'If you have problems after activating this option, copy and paste the default exclusions to quickly resolve issues:', 'rocket' );
-		$delay_js_list_helper .= sprintf( '<br><pre><code>%1$s</code></pre><br>', implode( '<br>', DelayJSSettings::get_delay_js_default_exclusions() ) );
-		$delay_js_list_helper .= sprintf(
-		// translators: %1$s = opening </a> tag, %2$s = closing </a> tag.
-			esc_html__( 'Also, please check our %1$sdocumentation%2$s for a list of compatibility exclusions.', 'rocket' ),
+		$delay_js_list_helper = sprintf(
+			// translators: %1$s = exclusion list, %2$s = opening </a> tag, %3$s = closing </a> tag.
+			__( 'If you have problems after activating this option, copy and paste the default exclusions to quickly resolve issues:<br><pre><code>%1$s</code></pre><br>Also, please check our %2$sdocumentation%3$s for a list of compatibility exclusions.', 'rocket' ),
+			implode( '<br>', DelayJSSettings::get_delay_js_default_exclusions() ),
 			'<a href="' . esc_url( $delay_js_exclusions_beacon['url'] ) . '"  target="_blank" rel="noopener">',
 			'</a>'
 		);
-
-		$delay_js_found_list_helper  = esc_html__( 'Internal scripts are excluded by default to prevent issues. Remove them to take full advantage of this option.', 'rocket' );
-		$delay_js_found_list_helper .= '<br>' . sprintf(
-		// translators: %1$s = opening </a> tag, %2$s = closing </a> tag.
-			esc_html__( 'If this causes trouble, restore the default exclusions, found %1$shere%2$s', 'rocket' ),
+		$delay_js_found_list_helper = sprintf(
+			// translators: %1$s = opening </a> tag, %2$s = closing </a> tag.
+			__( 'Internal scripts are excluded by default to prevent issues. Remove them to take full advantage of this option.<br>If this causes trouble, restore the default exclusions, found %1$shere%2$s', 'rocket' ),
 			'<a href="' . esc_url( $delay_js_beacon['url'] ) . '"  target="_blank" rel="noopener">',
 			'</a>'
 		);
@@ -574,13 +641,37 @@ class Page extends Abstract_Render {
 						'button_label' => __( 'Activate minify CSS', 'rocket' ),
 					],
 				],
+				'minify_concatenate_css'       => [
+					'type'              => 'checkbox',
+					'label'             => __( 'Combine CSS files <em>(Enable Minify CSS files to select)</em>', 'rocket' ),
+					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
+					'description'       => sprintf( __( 'Combine CSS merges all your files into 1, reducing HTTP requests. Not recommended if your site uses HTTP/2. %1$sMore info%2$s', 'rocket' ), '<a href="' . esc_url( $combine_beacon['url'] ) . '" data-beacon-article="' . esc_attr( $combine_beacon['id'] ) . '" target="_blank">', '</a>' ),
+					'helper'            => get_rocket_option( 'remove_unused_css' ) ? __( 'For compatibility and best results, this option is disabled when Remove unused CSS is enabled.', 'rocket' ) : '',
+					'container_class'   => [
+						$disable_combine_css ? 'wpr-isDisabled' : '',
+						'wpr-field--parent',
+						'wpr-NoPaddingBottom',
+					],
+					'section'           => 'css',
+					'page'              => 'file_optimization',
+					'default'           => 0,
+					'sanitize_callback' => 'sanitize_checkbox',
+					'input_attr'        => [
+						'disabled' => $disable_combine_css ? 1 : 0,
+					],
+					'warning'           => [
+						'title'        => __( 'This could break things!', 'rocket' ),
+						'description'  => __( 'If you notice any errors on your website after having activated this setting, just deactivate it again, and your site will be back to normal.', 'rocket' ),
+						'button_label' => __( 'Activate combine CSS', 'rocket' ),
+					],
+				],
 				'exclude_css'                  => [
 					'type'              => 'textarea',
 					'label'             => __( 'Excluded CSS Files', 'rocket' ),
-					'description'       => __( 'Specify URLs of CSS files to be excluded from minification (one per line).', 'rocket' ),
+					'description'       => __( 'Specify URLs of CSS files to be excluded from minification and concatenation (one per line).', 'rocket' ),
 					'helper'            => __( '<strong>Internal:</strong> The domain part of the URL will be stripped automatically. Use (.*).css wildcards to exclude all CSS files located at a specific path.', 'rocket' ) . '<br>' .
 					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
-					sprintf( __( '<strong>3rd Party:</strong> Use either the full URL path or only the domain name, to exclude external CSS. %1$sMore info%2$s', 'rocket' ), '<a href="' . esc_url( $exclude_css_beacon['url'] ) . '" data-beacon-article="' . esc_attr( $exclude_css_beacon['id'] ) . '" rel="noopener noreferrer" target="_blank">', '</a>' ),
+					sprintf( __( '<strong>3rd Party:</strong> Use either the full URL path or only the domain name, to exclude external CSS. %1$sMore info%2$s', 'rocket' ), '<a href="' . esc_url( $exclude_js_beacon['url'] ) . '" data-beacon-article="' . esc_attr( $exclude_js_beacon['id'] ) . '" rel="noopener noreferrer" target="_blank">', '</a>' ),
 					'container_class'   => [
 						'wpr-field--children',
 					],
@@ -598,7 +689,7 @@ class Page extends Abstract_Render {
 						$disable_ocd ? 'wpr-isDisabled' : '',
 						'wpr-isParent',
 					],
-					'description'       => $invalid_license ? __( 'Optimize CSS delivery eliminates render-blocking CSS on your website. Only one method can be selected. Remove Unused CSS is recommended for optimal performance, but limited only to the users with active license.', 'rocket' ) : __( 'Optimize CSS delivery eliminates render-blocking CSS on your website. Only one method can be selected. Remove Unused CSS is recommended for optimal performance.', 'rocket' ),
+					'description'       => __( 'Optimize CSS delivery eliminates render-blocking CSS on your website. Only one method can be selected. Remove Unused CSS is recommended for optimal performance.', 'rocket' ),
 					'section'           => 'css',
 					'page'              => 'file_optimization',
 					'default'           => 0,
@@ -628,16 +719,16 @@ class Page extends Abstract_Render {
 					'sanitize_callback'       => 'sanitize_checkbox',
 					'options'                 => [
 						'remove_unused_css' => [
-							'label'       => __( 'Remove Unused CSS', 'rocket' ),
-							'disabled'    => $invalid_license || $rucss_status['disable'] ? 'disabled' : false,
+							'label'       => __( 'Remove Unused CSS (Beta)', 'rocket' ),
+							//'disabled'    => $invalid_license ? 'disabled' : false,
 							// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
 							'description' => sprintf( __( 'Removes unused CSS per page and helps to reduce page size and HTTP requests. Recommended for best performance. Test thoroughly! %1$sMore info%2$s', 'rocket' ), '<a href="' . esc_url( $rucss_beacon['url'] ) . '" data-beacon-article="' . esc_attr( $rucss_beacon['id'] ) . '" target="_blank">', '</a>' ),
-							'warning'     => $invalid_license ? [] : [
-								'title'        => __( 'This could break things!', 'rocket' ),
-								'description'  => __( 'If you notice any errors on your website after having activated this setting, just deactivate it again, and your site will be back to normal.', 'rocket' ),
+							'warning'     => [
+								'title'        => __( 'We’re still working on it!', 'rocket' ),
+								'description'  => __( 'This is a beta feature. We’re providing you early access but some changes might be added later on. If you notice any errors on your website, simply deactivate the feature.', 'rocket' ),
 								'button_label' => __( 'Activate Remove Unused CSS', 'rocket' ),
 							],
-							'sub_fields'  => $invalid_license ? [] : [
+							'sub_fields'  => [
 								'remove_unused_css_safelist' =>
 								[
 									'type'              => 'textarea',
@@ -808,24 +899,6 @@ class Page extends Abstract_Render {
 						'sanitize_callback' => 'sanitize_checkbox',
 					]
 				),
-				'delay_js_exclusions_selected' => [
-					'type'              => 'categorized_multiselect',
-					'label'             => __( 'One-click exclusions', 'rocket' ),
-					'description'       => __( 'When using the Delay JavaScript Execution, you might experience delay loading elements located in the viewport that need to appear immediately - e.g. slider, header, menu.', 'rocket' ),
-					'sub_description'   => __( 'If you need instant visibility, click below on files that should NOT be delayed. This selection will help users interact with the elements straight away.', 'rocket' ),
-					'container_class'   => [
-						'wpr-field--children',
-					],
-					'parent'            => 'delay_js',
-					'section'           => 'js',
-					'page'              => 'file_optimization',
-					'default'           => [],
-					'sanitize_callback' => 'sanitize_textarea',
-					'input_attr'        => [
-						'disabled' => get_rocket_option( 'delay_js' ) ? 0 : 1,
-					],
-					'items'             => $this->delayjs_sitelist->prepare_delayjs_ui_list(),
-				],
 				'delay_js_exclusions'          => [
 					'type'              => 'textarea',
 					'label'             => __( 'Excluded JavaScript Files', 'rocket' ),
@@ -842,7 +915,6 @@ class Page extends Abstract_Render {
 						'disabled' => get_rocket_option( 'delay_js' ) ? 0 : 1,
 					],
 					'helper'            => DelayJSSettings::exclusion_list_has_default() ? $delay_js_found_list_helper : $delay_js_list_helper,
-					'placeholder'       => '/wp-includes/js/jquery/jquery.min.js',
 				],
 			]
 		);
@@ -893,15 +965,6 @@ class Page extends Abstract_Render {
 		 */
 		$disable_iframes_lazyload = (array) apply_filters( 'rocket_maybe_disable_iframes_lazyload_helper', $disable_iframes_lazyload );
 		$disable_iframes_lazyload = $this->sanitize_and_format_list( $disable_iframes_lazyload );
-
-		$disable_css_bg_img_lazyload = false;
-
-		/**
-		 * Lazyload Helper filter which disables WPR lazyload functionality for bg css.
-		 *
-		 * @param bool $disable_css_bg_img_lazyload Should the lazyload CSS be disabled.
-		 */
-		$disable_css_bg_img_lazyload = (bool) apply_filters( 'rocket_maybe_disable_css_bg_img_lazyload_helper', $disable_css_bg_img_lazyload );
 
 		/**
 		 * Lazyload Helper filter which disables WPR lazyload functionality to replace YouTube iframe with preview image.
@@ -958,7 +1021,7 @@ class Page extends Abstract_Render {
 
 		$this->settings->add_settings_fields(
 			[
-				'lazyload'            => [
+				'lazyload'         => [
 					'type'              => 'checkbox',
 					'label'             => __( 'Enable for images', 'rocket' ),
 					'section'           => 'lazyload_section',
@@ -974,22 +1037,7 @@ class Page extends Abstract_Render {
 					// translators: %1$s = “WP Rocket”, %2$s = a list of plugin names.
 					'description'       => ! empty( $disable_images_lazyload ) ? sprintf( __( 'LazyLoad for images is currently activated in %2$s. If you want to use %1$s’s LazyLoad, disable this option in %2$s.', 'rocket' ), WP_ROCKET_PLUGIN_NAME, $disable_images_lazyload ) : '',
 				],
-				'lazyload_css_bg_img' => [
-					'container_class'   => [
-						$disable_css_bg_img_lazyload ? 'wpr-isDisabled' : '',
-						'wpr-isParent',
-					],
-					'type'              => 'checkbox',
-					'label'             => __( 'Enable for CSS background images', 'rocket' ),
-					'section'           => 'lazyload_section',
-					'page'              => 'media',
-					'default'           => 0,
-					'sanitize_callback' => 'sanitize_checkbox',
-					'input_attr'        => [
-						'disabled' => $disable_css_bg_img_lazyload ? 1 : 0,
-					],
-				],
-				'lazyload_iframes'    => [
+				'lazyload_iframes' => [
 					'container_class'   => [
 						! empty( $disable_iframes_lazyload ) ? 'wpr-isDisabled' : '',
 						'wpr-isParent',
@@ -1004,7 +1052,7 @@ class Page extends Abstract_Render {
 						'disabled' => ! empty( $disable_iframes_lazyload ) ? 1 : 0,
 					],
 				],
-				'lazyload_youtube'    => [
+				'lazyload_youtube' => [
 					'container_class'   => [
 						! empty( $disable_youtube_lazyload ) ? 'wpr-isDisabled' : '',
 						'wpr-field--children',
@@ -1022,20 +1070,20 @@ class Page extends Abstract_Render {
 						'disabled' => ! empty( $disable_youtube_lazyload ) ? 1 : 0,
 					],
 				],
-				'exclude_lazyload'    => [
+				'exclude_lazyload' => [
 					'container_class' => [
 						'wpr-Delayjs',
 					],
 					'type'            => 'textarea',
 					'label'           => __( 'Excluded images or iframes', 'rocket' ),
 					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
-					'description'     => sprintf( __( 'Specify keywords (e.g. image filename, CSS filename, CSS class, domain) from the image or iframe code to be excluded (one per line). %1$sMore info%2$s', 'rocket' ), '<a href="' . esc_url( $exclude_lazyload['url'] ) . '" data-beacon-article="' . esc_attr( $exclude_lazyload['id'] ) . '" target="_blank" rel="noopener noreferrer">', '</a>' ),
+					'description'     => sprintf( __( 'Specify keywords (e.g. image filename, CSS class, domain) from the image or iframe code to be excluded (one per line). %1$sMore info%2$s', 'rocket' ), '<a href="' . esc_url( $exclude_lazyload['url'] ) . '" data-beacon-article="' . esc_attr( $exclude_lazyload['id'] ) . '" target="_blank" rel="noopener noreferrer">', '</a>' ),
 					'section'         => 'lazyload_section',
 					'page'            => 'media',
 					'default'         => [],
-					'placeholder'     => "example-image.jpg\nslider-image\nbackground-image-style.css",
+					'placeholder'     => "example-image.jpg\nslider-image",
 				],
-				'image_dimensions'    => [
+				'image_dimensions' => [
 					'type'              => 'checkbox',
 					'label'             => __( 'Add missing image dimensions', 'rocket' ),
 					'section'           => 'dimensions_section',
@@ -1064,7 +1112,6 @@ class Page extends Abstract_Render {
 		$bot_beacon    = $this->beacon->get_suggest( 'bot' );
 		$fonts_preload = $this->beacon->get_suggest( 'fonts_preload' );
 		$preload_links = $this->beacon->get_suggest( 'preload_links' );
-		$exclusions    = $this->beacon->get_suggest( 'preload_exclusions' );
 
 		$this->settings->add_settings_sections(
 			[
@@ -1072,7 +1119,7 @@ class Page extends Abstract_Render {
 					'title'       => __( 'Preload Cache', 'rocket' ),
 					'type'        => 'fields_container',
 					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
-					'description' => __( 'When you enable preloading WP Rocket will automatically detect your sitemaps and save all URLs to the database. The plugin will make sure that your cache is always preloaded.', 'rocket' ),
+					'description' => sprintf( __( 'When you enable preloading WP Rocket will generate the cache starting with the links on your homepage followed by the sitemaps you specify. Preloading is automatically triggered when you add or update content and can also be manually triggered from the admin bar or from the %1$sWP Rocket Dashboard%2$s.', 'rocket' ), '<a href="#dashboard">', '</a>' ),
 					'help'        => [
 						'id'  => $this->beacon->get_suggest( 'sitemap_preload' ),
 						'url' => $bot_beacon['url'],
@@ -1113,34 +1160,59 @@ class Page extends Abstract_Render {
 
 		$this->settings->add_settings_fields(
 			[
-				'manual_preload'       => [
+				'manual_preload' => [
 					'type'              => 'checkbox',
 					'label'             => __( 'Activate Preloading', 'rocket' ),
 					'section'           => 'preload_section',
 					'page'              => 'preload',
 					'default'           => 1,
-					'sanitize_callback' => 'sanitize_checkbox',
 					'container_class'   => [
 						'wpr-isParent',
 					],
+					'sanitize_callback' => 'sanitize_checkbox',
 				],
-				'preload_excluded_uri' => [
+			]
+		);
+
+		// Add this separately to be able to filter it easily.
+		$this->settings->add_settings_fields(
+			apply_filters(
+				'rocket_sitemap_preload_options',
+				[
+					'sitemap_preload' => [
+						'type'              => 'checkbox',
+						'label'             => __( 'Activate sitemap-based cache preloading', 'rocket' ),
+						'container_class'   => [
+							'wpr-isParent',
+							'wpr-field--children',
+						],
+						'parent'            => 'manual_preload',
+						'section'           => 'preload_section',
+						'page'              => 'preload',
+						'default'           => 0,
+						'sanitize_callback' => 'sanitize_checkbox',
+					],
+				]
+			)
+		);
+
+		$this->settings->add_settings_fields(
+			[
+				'sitemaps'      => [
 					'type'              => 'textarea',
-					'label'             => __( 'Exclude URLs', 'rocket' ),
+					'label'             => __( 'Sitemaps for preloading', 'rocket' ),
 					'container_class'   => [
 						'wpr-field--children',
 					],
-					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
-					'description'       => sprintf( __( 'Specify URLs to be excluded from the preload feature (one per line). %1$sMore info%2$s', 'rocket' ), '<a href="' . esc_url( $exclusions['url'] ) . '" data-beacon-article="' . esc_attr( $exclusions['id'] ) . '" target="_blank">', '</a>' ),
-					'placeholder'       => '/author/(.*)',
-					'helper'            => 'Use (.*) wildcards to address multiple URLs under a given path.',
-					'parent'            => 'manual_preload',
+					'description'       => __( 'Specify XML sitemap(s) to be used for preloading', 'rocket' ),
+					'placeholder'       => 'http://example.com/sitemap.xml',
+					'parent'            => 'sitemap_preload',
 					'section'           => 'preload_section',
 					'page'              => 'preload',
 					'default'           => [],
 					'sanitize_callback' => 'sanitize_textarea',
 				],
-				'dns_prefetch'         => [
+				'dns_prefetch'  => [
 					'type'              => 'textarea',
 					'label'             => __( 'URLs to prefetch', 'rocket' ),
 					'description'       => __( 'Specify external hosts to be prefetched (no <code>http:</code>, one per line)', 'rocket' ),
@@ -1150,7 +1222,7 @@ class Page extends Abstract_Render {
 					'default'           => [],
 					'sanitize_callback' => 'sanitize_textarea',
 				],
-				'preload_fonts'        => [
+				'preload_fonts' => [
 					'type'              => 'textarea',
 					'label'             => __( 'Fonts to preload', 'rocket' ),
 					'description'       => __( 'Specify urls of the font files to be preloaded (one per line). Fonts must be hosted on your own domain, or the domain you have specified on the CDN tab.', 'rocket' ),
@@ -1161,7 +1233,7 @@ class Page extends Abstract_Render {
 					'default'           => [],
 					'sanitize_callback' => 'sanitize_textarea',
 				],
-				'preload_links'        => [
+				'preload_links' => [
 					'type'              => 'checkbox',
 					'label'             => __( 'Enable link preloading', 'rocket' ),
 					'section'           => 'preload_links_section',
@@ -1192,8 +1264,6 @@ class Page extends Abstract_Render {
 		$never_cache_cookie_beacon  = $this->beacon->get_suggest( 'exclude_cookie' );
 		$exclude_user_agent_beacon  = $this->beacon->get_suggest( 'exclude_user_agent' );
 		$always_purge_beacon        = $this->beacon->get_suggest( 'always_purge' );
-		$cache_life_beacon          = $this->beacon->get_suggest( 'cache_lifespan' );
-		$nonce_beacon               = $this->beacon->get_suggest( 'nonce' );
 
 		$ecommerce_plugin = '';
 		$reject_uri_desc  = __( 'Sensitive pages like custom login/logout URLs should be excluded from cache.', 'rocket' );
@@ -1222,17 +1292,6 @@ class Page extends Abstract_Render {
 
 		$this->settings->add_settings_sections(
 			[
-				'cache_lifespan'               => [
-					'title'       => __( 'Cache Lifespan', 'rocket' ),
-					'type'        => 'fields_container',
-					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
-					'description' => sprintf( __( 'Cache files older than the specified lifespan will be deleted.<br>Enable %1$spreloading%2$s for the cache to be rebuilt automatically after lifespan expiration.', 'rocket' ), '<a href="#preload">', '</a>' ),
-					'help'        => [
-						'url' => $cache_life_beacon['url'],
-						'id'  => $this->beacon->get_suggest( 'cache_lifespan_section' ),
-					],
-					'page'        => 'advanced_cache',
-				],
 				'cache_reject_uri_section'     => [
 					'title'       => __( 'Never Cache URL(s)', 'rocket' ),
 					'type'        => 'fields_container',
@@ -1272,20 +1331,6 @@ class Page extends Abstract_Render {
 
 		$this->settings->add_settings_fields(
 			[
-				'purge_cron_interval'  => [
-					'type'              => 'cache_lifespan',
-					'label'             => __( 'Specify time after which the global cache is cleared<br>(0 = unlimited )', 'rocket' ),
-					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
-					'description'       => sprintf( __( 'Reduce lifespan to 10 hours or less if you notice issues that seem to appear periodically. %1$sWhy?%2$s', 'rocket' ), '<a href="' . esc_url( $nonce_beacon['url'] ) . '" data-beacon-article="' . esc_attr( $nonce_beacon['id'] ) . '" target="_blank">', '</a>' ),
-					'section'           => 'cache_lifespan',
-					'page'              => 'advanced_cache',
-					'default'           => 10,
-					'sanitize_callback' => 'sanitize_cache_lifespan',
-					'choices'           => [
-						'HOUR_IN_SECONDS' => __( 'Hours', 'rocket' ),
-						'DAY_IN_SECONDS'  => __( 'Days', 'rocket' ),
-					],
-				],
 				'cache_reject_uri'     => [
 					'type'              => 'textarea',
 					'description'       => __( 'Specify URLs of pages or posts that should never be cached (one per line)', 'rocket' ),
@@ -1547,19 +1592,15 @@ class Page extends Abstract_Render {
 		);
 
 		$maybe_display_cdn_helper = '';
+		$addons                   = [];
 
-		/**
-		 * Filters the addons names requiring the helper message.
-		 *
-		 * @param array $addons Array of addons.
-		 */
-		$addons = apply_filters( 'rocket_cdn_helper_addons', [] );
-
-		if ( ! is_array( $addons ) ) {
-			$addons = [];
+		if ( get_rocket_option( 'do_cloudflare' ) ) {
+			$addons[] = 'Cloudflare';
 		}
 
-		$addons = array_unique( $addons );
+		if ( get_rocket_option( 'sucury_waf_cache_sync' ) ) {
+			$addons[] = 'Sucuri';
+		}
 
 		if ( ! empty( $addons ) ) {
 			$maybe_display_cdn_helper = wp_sprintf(
@@ -1706,9 +1747,7 @@ class Page extends Abstract_Render {
 	 * @since 3.0
 	 */
 	private function addons_section() {
-		$webp_beacon       = $this->beacon->get_suggest( 'webp' );
-		$user_cache_beacon = $this->beacon->get_suggest( 'user_cache' );
-
+		$webp_beacon = $this->beacon->get_suggest( 'webp' );
 		$this->settings->add_page_section(
 			'addons',
 			[
@@ -1741,62 +1780,24 @@ class Page extends Abstract_Render {
 
 		$this->settings->add_settings_fields(
 			[
-				'cache_logged_user' => [
-					'type'              => 'one_click_addon',
-					'label'             => __( 'User Cache', 'rocket' ),
+				'do_cloudflare' => [
+					'type'              => 'rocket_addon',
+					'label'             => __( 'Cloudflare', 'rocket' ),
 					'logo'              => [
-						'url'    => WP_ROCKET_ASSETS_IMG_URL . 'icon-user-cache.svg',
-						'width'  => 152,
-						'height' => 135,
+						'url'    => WP_ROCKET_ASSETS_IMG_URL . 'logo-cloudflare2.svg',
+						'width'  => 153,
+						'height' => 51,
 					],
-					'title'             => __( 'If you need to create a dedicated set of cache files for each logged-in WordPress user, you must activate this add-on.', 'rocket' ),
-					// translators: %1$s = opening <a> tag, %2$s = closing </a> tag.
-					'description'       => sprintf( __( 'User cache is great when you have user-specific or restricted content on your website.<br>%1$sLearn more%2$s', 'rocket' ), '<a href="' . esc_url( $user_cache_beacon['url'] ) . '" data-beacon-article="' . esc_attr( $user_cache_beacon['id'] ) . '" target="_blank">', '</a>' ),
-					'section'           => 'one_click',
+					'title'             => __( 'Integrate your Cloudflare account with this add-on.', 'rocket' ),
+					'description'       => __( 'Provide your account email, global API key, and domain to use options such as clearing the Cloudflare cache and enabling optimal settings with WP Rocket.', 'rocket' ),
+					'section'           => 'addons',
 					'page'              => 'addons',
-					'settings_page'     => 'user_cache',
+					'settings_page'     => 'cloudflare',
 					'default'           => 0,
 					'sanitize_callback' => 'sanitize_checkbox',
 				],
 			]
 		);
-
-		$default_cf_settings = [
-			'do_cloudflare' => [
-				'type'              => 'rocket_addon',
-				'label'             => __( 'Cloudflare', 'rocket' ),
-				'logo'              => [
-					'url'    => rocket_get_constant( 'WP_ROCKET_ASSETS_IMG_URL', '' ) . 'logo-cloudflare2.svg',
-					'width'  => 153,
-					'height' => 51,
-				],
-				'title'             => __( 'Integrate your Cloudflare account with this add-on.', 'rocket' ),
-				'description'       => __( 'Provide your account email, global API key, and domain to use options such as clearing the Cloudflare cache and enabling optimal settings with WP Rocket.', 'rocket' ),
-				'helper'            => sprintf(
-				// translators: %1$s = opening span tag, %2$s = closing span tag.
-				__( '%1$sPlanning on using Automatic Platform Optimization (APO)?%2$s Just activate the official Cloudflare plugin and configure it. WP Rocket will automatically enable compatibility.', 'rocket' ),
-					'<span class="wpr-helper-title">',
-					'</span>'
-				),
-				'section'           => 'addons',
-				'page'              => 'addons',
-				'settings_page'     => 'cloudflare',
-				'default'           => 0,
-				'sanitize_callback' => 'sanitize_checkbox',
-			],
-		];
-
-		/**
-		 * Filters the Cloudflare Addon field values
-		 *
-		 * @since 3.14
-		 *
-		 * @param array $cf_settings Array of values to populate the field.
-		 */
-		$cf_settings = (array) apply_filters( 'rocket_cloudflare_field_settings', $default_cf_settings );
-		$cf_settings = wp_parse_args( $cf_settings, $default_cf_settings );
-
-		$this->settings->add_settings_fields( $cf_settings );
 
 		/**
 		 * Allow to display the "Varnish" tab in the settings page
@@ -1972,7 +1973,7 @@ class Page extends Abstract_Render {
 		if ( ! defined( 'WP_ROCKET_CF_API_KEY_HIDDEN' ) || ! WP_ROCKET_CF_API_KEY_HIDDEN ) {
 			$this->settings->add_settings_fields(
 				[
-					'cloudflare_api_key_mask' => [
+					'cloudflare_api_key' => [
 						'label'       => _x( 'Global API key:', 'Cloudflare', 'rocket' ),
 						'description' => sprintf( '<a href="%1$s" target="_blank">%2$s</a>', esc_url( $beacon_cf_credentials_api['url'] ), _x( 'Find your API key', 'Cloudflare', 'rocket' ) ),
 						'default'     => '',
@@ -1994,7 +1995,7 @@ class Page extends Abstract_Render {
 					'section'         => 'cloudflare_credentials',
 					'page'            => 'cloudflare',
 				],
-				'cloudflare_zone_id_mask'     => [
+				'cloudflare_zone_id'          => [
 					'label'           => _x( 'Zone ID', 'Cloudflare', 'rocket' ),
 					'default'         => '',
 					'container_class' => [
@@ -2076,7 +2077,7 @@ class Page extends Abstract_Render {
 		$this->settings->add_settings_fields(
 			[
 				'sucury_waf_api_key' => [
-					'label'       => _x( 'Firewall API key (for plugin), must be in format {32 characters}/{32 characters}:', 'Sucuri', 'rocket' ),
+					'label'       => _x( 'Firewall API key (for plugin), must be in format <code>{32 characters}/{32 characters}</code>:', 'Sucuri', 'rocket' ),
 					'description' => sprintf( '<a href="%1$s" target="_blank">%2$s</a>', 'https://kb.sucuri.net/firewall/Performance/clearing-cache', _x( 'Find your API key', 'Sucuri', 'rocket' ) ),
 					'default'     => '',
 					'section'     => 'sucuri_credentials',
@@ -2092,30 +2093,6 @@ class Page extends Abstract_Render {
 	 * @since 3.0
 	 */
 	private function hidden_fields() {
-
-		$hidden_fields = [
-			'consumer_key',
-			'consumer_email',
-			'secret_key',
-			'license',
-			'secret_cache_key',
-			'minify_css_key',
-			'minify_js_key',
-			'version',
-			'previous_version',
-			'cloudflare_old_settings',
-			'cache_ssl',
-			'minify_google_fonts',
-			'emoji',
-			'remove_unused_css',
-			'async_css',
-			'cache_mobile',
-			'do_caching_mobile_files',
-			'minify_concatenate_css',
-			'cloudflare_api_key',
-			'cloudflare_zone_id',
-		];
-
 		$this->settings->add_hidden_settings_fields(
 			/**
 			 * Filters the hidden settings fields
@@ -2127,7 +2104,23 @@ class Page extends Abstract_Render {
 			 */
 			apply_filters(
 				'rocket_hidden_settings_fields',
-				$hidden_fields
+				[
+					'consumer_key',
+					'consumer_email',
+					'secret_key',
+					'license',
+					'secret_cache_key',
+					'minify_css_key',
+					'minify_js_key',
+					'version',
+					'cloudflare_old_settings',
+					'sitemap_preload_url_crawl',
+					'cache_ssl',
+					'minify_google_fonts',
+					'emoji',
+					'remove_unused_css',
+					'async_css',
+				]
 			)
 		);
 	}
@@ -2141,7 +2134,7 @@ class Page extends Abstract_Render {
 	 * @param  string $tag_name Name of the HTML tag that will wrap each element of the list.
 	 * @return array
 	 */
-	private function sanitize_and_format_list( $list, $tag_name = 'strong' ) { // phpcs:ignore Universal.NamingConventions.NoReservedKeywordParameterNames.listFound
+	private function sanitize_and_format_list( $list, $tag_name = 'strong' ) {
 		if ( ! is_array( $list ) || empty( $list ) ) {
 			return [];
 		}
@@ -2203,110 +2196,5 @@ class Page extends Abstract_Render {
 	public function display_radio_options_sub_fields( $sub_fields ) {
 		$sub_fields = $this->settings->set_radio_buttons_sub_fields_value( $sub_fields );
 		$this->render->render_fields( $sub_fields );
-	}
-
-	/**
-	 * Render mobile cache option.
-	 *
-	 * @return void
-	 */
-	public function display_mobile_cache_option(): void {
-		if ( (bool) $this->options->get( 'cache_mobile', 0 ) ) {
-			return;
-		}
-
-		$data = $this->beacon->get_suggest( 'mobile_cache' );
-		echo $this->generate( 'settings/mobile-cache', $data ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Dynamic content is properly escaped in the view.
-	}
-
-	/**
-	 * Callback method for the AJAX request to mobile cache.
-	 *
-	 * @return void
-	 */
-	public function enable_mobile_cache(): void {
-		check_ajax_referer( 'rocket-ajax', 'nonce', true );
-
-		if ( ! current_user_can( 'rocket_manage_options' ) ) {
-			wp_send_json_error();
-			return;
-		}
-
-		$this->options->set( 'cache_mobile', 1 );
-		$this->options->set( 'do_caching_mobile_files', 1 );
-		update_option( rocket_get_constant( 'WP_ROCKET_SLUG', 'wp_rocket_settings' ), $this->options->get_options() );
-
-		wp_send_json_success();
-	}
-
-	/**
-	 * Enable Separate cache files option on upgrade.
-	 *
-	 * @return void
-	 */
-	public function enable_separate_cache_files_mobile(): void {
-		if ( ! (bool) $this->options->get( 'cache_mobile', 0 ) ) {
-			return;
-		}
-
-		if ( (bool) $this->options->get( 'do_caching_mobile_files', 0 ) ) {
-			return;
-		}
-
-		$this->options->set( 'do_caching_mobile_files', 1 );
-		update_option( rocket_get_constant( 'WP_ROCKET_SLUG', 'wp_rocket_settings' ), $this->options->get_options() );
-	}
-
-	/**
-	 * Display an update notice when the plugin is updated.
-	 *
-	 * @return void
-	 */
-	public function display_update_notice() {
-		if ( ! current_user_can( 'rocket_manage_options' ) ) {
-			return;
-		}
-
-		if ( 'settings_page_wprocket' !== get_current_screen()->id ) {
-			return false;
-		}
-
-		$boxes = get_user_meta( get_current_user_id(), 'rocket_boxes', true );
-
-		if ( in_array( 'rocket_update_notice', (array) $boxes, true ) ) {
-			return;
-		}
-
-		$previous_version = $this->options->get( 'previous_version' );
-
-		// Bail-out for fresh install.
-		if ( empty( $previous_version ) ) {
-			return;
-		}
-
-		// Bail-out if previous version is greater than 3.16.
-		if ( $previous_version > '3.16' ) {
-			return;
-		}
-
-		$critical_images_beacon = $this->beacon->get_suggest( 'optimize_critical_images' );
-		$remove_cache_tab       = $this->beacon->get_suggest( 'remove_cache_tab' );
-
-		rocket_notice_html(
-			[
-				'status'         => 'info',
-				'dismissible'    => '',
-				'message'        => sprintf(
-					// translators: %1$s: opening strong tag, %2$s: closing strong tag, %3$s: opening a tag, %4$s: option a tag, %5$s: opening a tag.
-					__( '%1$sWP Rocket:%2$s the plugin has been updated to the 3.16 version. Our brand new feature %3$sOptimize critical images%5$s is automatically activated now! Also, the Cache tab was removed but the existing features will remain working, %4$ssee more here%5$s.', 'rocket' ),
-					'<strong>',
-					'</strong>',
-					'<a href="' . esc_url( $critical_images_beacon['url'] ) . '" data-beacon-article="' . esc_attr( $critical_images_beacon['id'] ) . '" target="_blank" rel="noopener noreferrer">',
-					'<a href="' . esc_url( $remove_cache_tab['url'] ) . '" data-beacon-article="' . esc_attr( $remove_cache_tab['id'] ) . '" target="_blank" rel="noopener noreferrer">',
-					'</a>'
-				),
-				'dismiss_button' => 'rocket_update_notice',
-			]
-		);
 	}
 }

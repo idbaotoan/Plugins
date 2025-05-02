@@ -27,6 +27,9 @@ class Flatsome implements Subscriber_Interface {
 	 * @return array
 	 */
 	public function preserve_patterns( $patterns ): array {
+		if ( ! self::is_flatsome() ) {
+			return $patterns;
+		}
 
 		$preserve = [
 			'#section_',
@@ -55,5 +58,18 @@ class Flatsome implements Subscriber_Interface {
 		];
 
 		return array_merge( $patterns, $preserve );
+	}
+
+	/**
+	 * Checks if the current theme (or parent) is Flatsome
+	 *
+	 * @since 3.11
+	 *
+	 * @param WP_Theme $theme Instance of the theme.
+	 */
+	private static function is_flatsome( $theme = null ) {
+		$theme = $theme instanceof \WP_Theme ? $theme : wp_get_theme();
+
+		return 'flatsome' === strtolower( $theme->get( 'Name' ) ) || 'flatsome' === strtolower( $theme->get_template() );
 	}
 }

@@ -8,5 +8,6 @@ $baseDir = dirname($vendorDir);
 return array(
     'WP_Rocket\\' => array($baseDir . '/inc'),
     'WPMedia\\Cloudflare\\' => array($baseDir . '/inc/Addon/Cloudflare'),
-    'Composer\\Installers\\' => array($vendorDir . '/composer/installers/src/Composer/Installers'),
+    'Psr\\Log\\' => array($vendorDir . '/psr/log/Psr/Log'),
+    'Monolog\\' => array($vendorDir . '/monolog/monolog/src/Monolog'),
 );

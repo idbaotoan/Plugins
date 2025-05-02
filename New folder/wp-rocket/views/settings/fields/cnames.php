@@ -9,18 +9,9 @@ defined( 'ABSPATH' ) || exit;
 
 $rocket_cnames      = get_rocket_option( 'cdn_cnames' );
 $rocket_cnames_zone = get_rocket_option( 'cdn_zone' );
-
-/**
- * Filters the fields to be disabled for the CDN section.
- *
- * @since  3.12.1
- *
- * @param bool $alter Input should be altered.
- */
-$rocket_disable_input_alt = apply_filters( 'rocket_disable_cdn_option_change', false );
 ?>
 <div class="wpr-fieldsContainer-fieldset">
-	<div class="wpr-field <?php echo $rocket_disable_input_alt ? 'wpr-isDisabled' : ''; ?>">
+	<div class="wpr-field">
 		<div class="wpr-field-description-label">
 			<?php echo $data['label']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Dynamic content is properly escaped in the view. ?>
 		</div>
@@ -36,11 +27,11 @@ $rocket_disable_input_alt = apply_filters( 'rocket_disable_cdn_option_change', f
 				?>
 					<div class="wpr-multiple">
 						<div class="wpr-text">
-							<input type="text" name="wp_rocket_settings[cdn_cnames][<?php echo esc_attr( $key ); ?>]" value="<?php echo esc_attr( $url ); ?>" placeholder="cdn.example.com" <?php echo $rocket_disable_input_alt ? 'disabled' : ''; ?> />
+							<input type="text" name="wp_rocket_settings[cdn_cnames][<?php echo esc_attr( $key ); ?>]" value="<?php echo esc_attr( $url ); ?>" placeholder="cdn.example.com" />
 						</div>
 						<div class="wpr-field-betweenText"><?php esc_html_e( 'reserved for', 'rocket' ); ?></div>
 						<div class="wpr-select">
-							<select name="wp_rocket_settings[cdn_zone][<?php echo esc_attr( $key ); ?>]" <?php echo $rocket_disable_input_alt ? 'disabled' : ''; ?> >
+							<select name="wp_rocket_settings[cdn_zone][<?php echo esc_attr( $key ); ?>]">
 								<option value="all" <?php selected( $rocket_cnames_zone[ $key ], 'all' ); ?>><?php esc_html_e( 'All files', 'rocket' ); ?></option>
 								<?php
 								/**
@@ -60,9 +51,7 @@ $rocket_disable_input_alt = apply_filters( 'rocket_disable_cdn_option_change', f
 								<option value="css" <?php selected( $rocket_cnames_zone[ $key ], 'css' ); ?>><?php esc_html_e( 'CSS', 'rocket' ); ?></option>
 							</select>
 						</div>
-						<?php if ( ! $rocket_disable_input_alt ) : ?>
-							<button class="dashicons dashicons-no wpr-multiple-close hide-if-no-js"></button>
-						<?php endif ?>
+						<button class="dashicons dashicons-no wpr-multiple-close hide-if-no-js"></button>
 					</div>
 				<?php
 			endforeach;
@@ -127,10 +116,8 @@ $rocket_disable_input_alt = apply_filters( 'rocket_disable_cdn_option_change', f
 				<button class="dashicons dashicons-no wpr-multiple-close hide-if-no-js"></button>
 			</div>
 		</div>
-		<?php if ( ! $rocket_disable_input_alt ) : ?>
-			<button class='wpr-button wpr-button--small wpr-button--purple wpr-button--icon wpr-icon-plus wpr-button--addMulti'>
-				<?php esc_html_e( 'Add CNAME', 'rocket' ); ?>
-			</button>
-		<?php endif ?>
+		<button class='wpr-button wpr-button--small wpr-button--purple wpr-button--icon wpr-icon-plus wpr-button--addMulti'>
+			<?php esc_html_e( 'Add CNAME', 'rocket' ); ?>
+		</button>
 	</div>
 </div>
